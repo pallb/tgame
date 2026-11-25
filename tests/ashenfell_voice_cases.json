@@ -1,0 +1,30 @@
+{
+  "selection": [
+    {"npc":"garrick","at":"inn","question":"What is your name?","expect":"name"},
+    {"npc":"garrick","at":"inn","question":"Were there horses by the river last night?","expect":"introduce"},
+    {"npc":"garrick","at":"inn","question":"How many were there?","expect":"unsure","previous":["What did you hear?","I heard horses near the river last night."]},
+    {"npc":"mara","at":"river","question":"Is that a lockbox?","expect":"topic_lockbox"},
+    {"npc":"mara","at":"river","question":"How does it open?","expect":"topic_rhyme","previous":["Is that a lockbox?","Aye, that's the lockbox beside the cellar door."]},
+    {"npc":"mara","at":"river","question":"Is that door locked?","expect":"topic_locked_door"},
+    {"npc":"mara","at":"river","question":"Will this key open anything?","expect":"unsure"},
+    {"npc":"mara","at":"river","question":"What about this key?","expect":"topic_cellar_key","steps":[["solve","reed moon fish"]],"previous":["Is the cellar door locked?","The cellar door is locked."]},
+    {"npc":"mara","at":"river","question":"Is it still locked?","expect":"topic_open_door","steps":[["solve","reed moon fish"],["open","cellar"]],"previous":["Is the cellar door locked?","The cellar door is locked."]},
+    {"npc":"nessa","at":"forge","question":"And who stamped it?","expect":"recall_nessa_seal","steps":[["inspect","docket"],["show","nessa"]],"previous":["What about the merchant's warning?","After seeing the docket, Nessa confirms Garrick sealed a warning addressed to the merchant."]},
+    {"npc":"ivo","at":"watch","question":"Which way was the light moving?","expect":"recall_ivo_lantern","steps":[["inspect","log"],["show","ivo"]]},
+    {"npc":"ivo","at":"watch","question":"How many were there?","expect":"unsure","previous":["What did the riders do?","Ivo says, 'The riders turned around at the north gate. I logged it here.'"]}
+  ],
+  "review": [
+    {"npc":"nessa","evidence":"After seeing the docket, Nessa confirms Garrick sealed a warning addressed to the merchant.","draft":"Once I saw the docket, I could confirm it. Garrick put his seal on a warning for the merchant.","valid":true},
+    {"npc":"nessa","evidence":"After seeing the docket, Nessa confirms Garrick sealed a warning addressed to the merchant.","draft":"After I checked the docket, I sealed the merchant's warning myself. Garrick was there.","valid":false},
+    {"npc":"mara","evidence":"I reckon the merchant took the north road.","draft":"My guess? The merchant went by the north road.","valid":true},
+    {"npc":"mara","evidence":"I reckon the merchant took the north road.","draft":"I saw the merchant take the north road.","valid":false},
+    {"npc":"garrick","evidence":"I heard horses near the river last night.","draft":"Horses down by the river last night. Heard them myself.","valid":true},
+    {"npc":"garrick","evidence":"I heard horses near the river last night.","draft":"I heard four horses near the river last night.","valid":false},
+    {"npc":"garrick","evidence":"Bring me something to show the merchant trusted me and I'll help.","draft":"Show me proof the merchant trusted me. Then I'll help.","valid":true},
+    {"npc":"garrick","evidence":"Bring me something to show the merchant trusted me and I'll help.","draft":"The merchant trusted me. I'll help you now.","valid":false},
+    {"npc":"ivo","evidence":"After checking the patrol log, Ivo recalls a light moving downhill toward the landing.","draft":"Checked my log. I remember a light heading downhill toward the landing.","valid":true},
+    {"npc":"ivo","evidence":"After checking the patrol log, Ivo recalls a light moving downhill toward the landing.","draft":"The log put the merchant's lantern heading uphill away from the landing.","valid":false},
+    {"npc":"mara","evidence":"Follow the old rhyme to open the lockbox. Reeds grow first, then the moon rises, then the fish come up to feed.","draft":"The old rhyme opens that box: reeds first, moon next, fish last.","valid":true},
+    {"npc":"mara","evidence":"Follow the old rhyme to open the lockbox. Reeds grow first, then the moon rises, then the fish come up to feed.","draft":"For the lockbox, enter the moon, then the reeds, then the fish.","valid":false}
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "profiles": {
+    "qwen-4b": {"model": "qwen3:4b-instruct", "context": 2048, "temperature": 0.0},
+    "qwen-8b": {"model": "qwen3:8b-q4_K_M", "context": 2048, "temperature": 0.0},
+    "qwen-1.7b": {"model": "qwen3:1.7b", "context": 2048, "temperature": 0.0}
+  }
+}

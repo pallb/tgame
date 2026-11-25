@@ -1,0 +1,22 @@
+{
+  "qwen-4b": {
+    "model": "qwen3:4b-instruct",
+    "already_loaded": false,
+    "preload_ms": 10500,
+    "resident_bytes": 2876160081,
+    "resident_gpu_bytes": 2876160081,
+    "context": 2048,
+    "digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+    "peak_device_mib": 5482
+  },
+  "qwen-8b": {
+    "model": "qwen3:8b-q4_K_M",
+    "already_loaded": false,
+    "preload_ms": 17360,
+    "resident_bytes": 5282505686,
+    "resident_gpu_bytes": 5282505686,
+    "context": 2048,
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "peak_device_mib": 7671
+  }
+}

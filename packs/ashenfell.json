@@ -1,0 +1,216 @@
+{
+  "schema": 1,
+  "id": "ashenfell",
+  "version": 1,
+  "title": "Ashenfell — The Missing Merchant",
+  "start": "inn",
+  "goal": "resolved",
+  "puzzle_symbols": {"river": ["fish", "moon", "reed"]},
+  "dialogue_style": {
+    "garrick": {
+      "voice": "Gruff, terse, and practical. Short sentences, plain words. Slow to trust.",
+      "name": "Garrick",
+      "opening_question": "What did you hear by the river?",
+      "focused_introduction": "I heard horses near the river last night.",
+      "evidence": {"introduce": [
+        "Witness: Garrick. What he heard: horses. Where: near the river. When: last night."
+      ]},
+      "protect": {"introduce": ["horses", "river"]},
+      "topics": {
+        "help": {
+          "label": "What would make you help?",
+          "question": "What would make you help me?",
+          "reply": "Bring me something to show the merchant trusted me and I'll help.",
+          "fixed": true
+        }
+      }
+    },
+    "mara": {
+      "voice": "A matter-of-fact village warden. Direct and watchful, with a rural turn of phrase.",
+      "name": "Mara",
+      "opening_question": "Which road do you think the merchant took?",
+      "focused_introduction": "I reckon the merchant took the north road.",
+      "topics": {
+        "lockbox": {
+          "label": "Identify the lockbox", "question": "Is that a lockbox?",
+          "reply": "Aye, that's the lockbox beside the cellar door.", "protect": ["lockbox", "cellar door"]
+        },
+        "rhyme": {
+          "label": "Ask how the lockbox opens", "question": "How do I open the lockbox?",
+          "reply": "Follow the old rhyme to open the lockbox. Reeds grow first, then the moon rises, then the fish come up to feed.",
+          "fixed": true
+        },
+        "locked_door": {
+          "label": "Check the cellar door", "question": "Is the cellar door locked?",
+          "reply": "The cellar door is locked.",
+          "fixed": true,
+          "unless_flags": ["cellar_open"]
+        },
+        "open_door": {
+          "label": "Check the cellar door", "question": "Is the cellar door locked?",
+          "reply": "The cellar door is unlocked.",
+          "fixed": true,
+          "requires_flags": ["cellar_open"]
+        },
+        "cellar_key": {
+          "label": "Ask about the key", "question": "What does this key open?",
+          "reply": "That key opens the cellar door.",
+          "fixed": true,
+          "any_items": ["cellar_key", "spare_key"]
+        }
+      },
+      "evidence": {"introduce": [
+        "Mara's guess is that the merchant took the north road."
+      ]},
+      "protect": {"introduce": ["north road"]}
+    },
+    "nessa": {
+      "voice": "An attentive village smith. Warm but precise about deliveries and records.",
+      "name": "Nessa",
+      "opening_question": "What did the merchant pick up?",
+      "recall_questions": {"recall_nessa_seal": "Who sealed the merchant's warning?"},
+      "evidence": {
+        "introduce": ["The merchant picked up a lantern before dusk.", "Nessa expects the delivery docket to still be on the wall."],
+        "recall_nessa_seal": ["After seeing the docket, Nessa confirms the identity of the person who sealed the warning.", "Actor: Garrick. Action: sealed a warning. Recipient: the merchant."]
+      },
+      "protect": {"introduce": ["merchant", "lantern", "before dusk"], "recall_nessa_seal": ["Garrick", "warning", "merchant"]}
+    },
+    "ivo": {
+      "voice": "A watchman accustomed to reporting what he saw. Spare, exact phrasing.",
+      "name": "Ivo",
+      "opening_question": "What did the riders do?",
+      "recall_questions": {"recall_ivo_lantern": "Which way did the light move?"},
+      "evidence": {
+        "introduce": ["The riders turned around at the north gate.", "Ivo recorded that event in the log here."],
+        "recall_ivo_lantern": ["After checking the patrol log, Ivo recalls a light moving downhill toward the landing."]
+      },
+      "protect": {"introduce": ["riders", "north gate"], "recall_ivo_lantern": ["downhill", "landing"]}
+    }
+  },
+  "locations": {
+    "inn": {
+      "name": "The Crooked Lantern",
+      "description": "Rain taps against the windows. Garrick sits by the fire. A burned letter lies on the hearth.",
+      "exits": ["river", "forge"]
+    },
+    "river": {
+      "name": "River Landing",
+      "description": "Warden Mara watches a shuttered cellar. Beside its door is a lockbox engraved with a reed, a moon, and a fish.",
+      "exits": ["inn", "cellar", "watch"]
+    },
+    "cellar": {
+      "name": "Merchant's Cellar",
+      "description": "The merchant is shivering but alive. A shipping ledger lies open beside him.",
+      "exits": ["river"]
+    },
+    "forge": {
+      "name": "Village Forge",
+      "description": "Nessa is banking the coals. A delivery docket hangs above the workbench.",
+      "exits": ["inn"]
+    },
+    "watch": {
+      "name": "North Road Watch",
+      "description": "Watchman Ivo stands beside a snuffed lantern. A patrol log rests on the rail.",
+      "exits": ["river"]
+    }
+  },
+  "flags": ["garrick_helped", "box_open", "cellar_open", "resolved"],
+  "facts": {
+    "horses": {"kind": "Testimony", "text": "Garrick heard horses by the river last night."},
+    "letter": {"kind": "Evidence", "text": "The burned letter bears Garrick's seal and warns the merchant to hide until morning."},
+    "closed_road": {"kind": "Testimony", "text": "Mara believes the merchant fled along the north road."},
+    "ledger": {"kind": "Evidence", "text": "The ledger records a canceled north-road shipment and a delivery to the riverside cellar."},
+    "nessa_delivery": {"kind": "Testimony", "text": "Nessa says the merchant collected a new lantern before dusk."},
+    "docket": {"kind": "Evidence", "text": "The forge docket lists the lantern as paid for and delivered."},
+    "nessa_seal": {"kind": "Testimony", "text": "After seeing the docket, Nessa confirms Garrick sealed a warning addressed to the merchant."},
+    "ivo_patrol": {"kind": "Testimony", "text": "Ivo says the riders turned around at the north gate."},
+    "patrol": {"kind": "Evidence", "text": "The patrol log shows the north gate was barred throughout the storm."},
+    "ivo_lantern": {"kind": "Testimony", "text": "After checking the patrol log, Ivo recalls a light moving downhill toward the landing."}
+  },
+  "items": {
+    "cellar_key": {"name": "Cellar key", "source": "garrick"},
+    "spare_key": {"name": "Spare cellar key", "source": "reed moon fish"}
+  },
+  "rules": [
+    {
+      "location": "inn", "verb": "talk", "target": "garrick",
+      "message": "Garrick says, 'I heard horses near the river. Bring me something to show the merchant trusted me and I'll help.'",
+      "sets": ["horses"]
+    },
+    {
+      "location": "inn", "verb": "inspect", "target": "letter",
+      "message": "A blackened scrap reads, 'Hide until morning.' Garrick's seal is still visible.",
+      "sets": ["letter"], "once": "letter"
+    },
+    {
+      "location": "inn", "verb": "show", "target": "garrick",
+      "requires": ["letter"], "sets": ["garrick_helped"], "once": "garrick_helped",
+      "gives": ["cellar_key"],
+      "message": "Garrick recognizes his seal and hands you the key. 'Try the cellar by the landing.'",
+      "blocked": "You have nothing to show Garrick."
+    },
+    {
+      "location": "river", "verb": "talk", "target": "mara",
+      "message": "Mara says, 'I reckon he took the north road. The lockbox will open if you follow the old rhyme. Reeds grow first, then the moon rises, then the fish come up to feed.'",
+      "sets": ["closed_road"]
+    },
+    {
+      "location": "river", "verb": "solve", "target": "reed moon fish",
+      "sets": ["box_open"], "once": "box_open", "gives": ["spare_key"],
+      "message": "The lockbox clicks open. You take the spare key."
+    },
+    {
+      "location": "river", "verb": "open", "target": "cellar",
+      "needs_any_item": ["cellar_key", "spare_key"],
+      "sets": ["cellar_open"], "once": "cellar_open",
+      "message": "The cellar door swings open.",
+      "blocked": "The cellar door needs a key."
+    },
+    {
+      "location": "cellar", "verb": "inspect", "target": "ledger",
+      "sets": ["ledger"], "once": "ledger",
+      "message": "The last entry cancels the north-road shipment. The merchant tells you he hid here when the horses approached."
+    },
+    {
+      "location": "forge", "verb": "talk", "target": "nessa",
+      "sets": ["nessa_delivery"],
+      "message": "Nessa says, 'The merchant picked up a lantern before dusk. The delivery docket should still be on the wall.'"
+    },
+    {
+      "location": "forge", "verb": "inspect", "target": "docket",
+      "sets": ["docket"], "once": "docket",
+      "message": "The entry confirms the delivery. Someone drew Garrick's seal next to it."
+    },
+    {
+      "location": "forge", "verb": "show", "target": "nessa",
+      "requires": ["docket"], "sets": ["nessa_seal"], "once": "nessa_seal",
+      "message": "Nessa taps the seal. 'Garrick used that stamp on a warning for the merchant.'",
+      "blocked": "Nessa asks what you'd like her to look at."
+    },
+    {
+      "location": "watch", "verb": "talk", "target": "ivo",
+      "sets": ["ivo_patrol"],
+      "message": "Ivo says, 'The riders turned around at the north gate. I logged it here.'"
+    },
+    {
+      "location": "watch", "verb": "inspect", "target": "log",
+      "sets": ["patrol"], "once": "patrol",
+      "message": "The log records the north gate barred from dusk until after the storm."
+    },
+    {
+      "location": "watch", "verb": "show", "target": "ivo",
+      "requires": ["patrol"], "sets": ["ivo_lantern"], "once": "ivo_lantern",
+      "message": "Ivo checks the time. 'That's when I saw a lantern heading downhill toward the landing.'",
+      "blocked": "Ivo asks what you'd like him to check."
+    },
+    {
+      "location": "river", "verb": "report", "target": "mara",
+      "requires": ["ledger"], "sets": ["resolved"], "once": "resolved",
+      "message": "Mara reads the ledger and goes to bring the merchant home.",
+      "blocked": "Mara asks you to bring evidence of where the merchant went."
+    }
+  ],
+  "gates": [
+    {"from": "river", "to": "cellar", "requires": "cellar_open"}
+  ]
+}
