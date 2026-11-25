@@ -94,7 +94,7 @@ def measured(profile, provider, pack, cases, review_cases, output):
                 row["approved_line"] = line
                 row["text"] = line
                 try:
-                    row["text"] = rewrite_choice(provider, pack, npc, choice, question, line)
+                    row["text"] = rewrite_choice(provider, pack, state, npc, choice, question, line)
                 except ERRORS as error:
                     row["rewrite_error"] = str(error)
                 style = pack.dialogue_style.get(npc, {})

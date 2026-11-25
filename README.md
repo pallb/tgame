@@ -18,7 +18,8 @@ python -m rpg --tui --save ashenfell.sqlite3
 ```
 
 - **F2** or `/map` opens nearby routes. Select a destination with the arrow keys and press Enter.
-- **F3** or `/journal` opens the evidence board.
+- **F3** or `/journal` opens the evidence board. Select a clue to see its source, location and certainty. In model-enabled play, **Ask witness** opens the conversation with a suggested question when that witness is nearby.
+- **F6** or `/characters` opens the character board. Select a person to see where to find them, their testimony, and discovered evidence about them. In model-enabled play, **Talk to** opens a conversation with a nearby character.
 - Click **Views** or **Actions here** entries in the sidebar to open a panel or run a command. You can also focus a menu with Tab and select an entry with Enter.
 - Type `try lockbox` or `/puzzle`, or press **F4**, to open the lockbox at the landing. Click the engravings or select them with the arrow keys and Enter. Click **Try combination** or press **F5** to test the slots. Use **Undo**, **Backspace**, or **Reset** to revise the attempt.
 - **Esc** closes a panel. **Up** and **Down** browse command history from the input. **Ctrl+Q** quits.

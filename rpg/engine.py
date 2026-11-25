@@ -3,10 +3,43 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+CERTAINTY_LABELS = {
+    "guess": "Guess",
+    "firsthand": "Firsthand account",
+    "reported": "Reported account",
+    "recorded": "Documented evidence",
+}
+
+
+@dataclass(frozen=True)
+class Evidence:
+    id: str
+    title: str
+    kind: str
+    text: str
+    certainty: str | None
+    source: str | None
+    location: str | None
+    witness: str | None
+    question: str | None
+    subjects: frozenset[str]
+
+    @property
+    def certainty_label(self) -> str:
+        return CERTAINTY_LABELS.get(self.certainty, "Certainty unspecified")
+
+
 @dataclass(frozen=True)
 class Command:
     verb: str
     target: str
+
+
+@dataclass(frozen=True)
+class Character:
+    id: str
+    name: str
+    locations: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -47,7 +80,7 @@ class Pack:
     start: str
     goal: str
     locations: dict
-    facts: dict
+    facts: dict[str, Evidence]
     items: dict
     rules: dict[tuple[str, Command], Rule]
     gates: dict[tuple[str, str], str]
@@ -60,7 +93,21 @@ class Pack:
         if data["schema"] != 1:
             raise ValueError("Unsupported pack schema")
         locations = data["locations"]
-        facts = data["facts"]
+        facts = {}
+        for key, entry in data["facts"].items():
+            certainty = entry.get("certainty")
+            location = entry.get("location")
+            witness = entry.get("witness")
+            question = entry.get("question")
+            if certainty is not None and certainty not in CERTAINTY_LABELS:
+                raise ValueError(f"Unknown certainty for evidence {key}")
+            if location is not None and location not in locations:
+                raise ValueError(f"Unknown source location for evidence {key}")
+            if (witness or question) and not (witness and question and location):
+                raise ValueError(f"Evidence {key} needs a witness, question and source location to link a conversation")
+            facts[key] = Evidence(key, entry.get("title", key.replace("_", " ").capitalize()),
+                                  entry["kind"], entry["text"], certainty, entry.get("source"),
+                                  location, witness, question, frozenset(entry.get("subjects", [])))
         items = data["items"]
         flags = set(data["flags"]) | facts.keys()
         if data["start"] not in locations or data["goal"] not in flags:
@@ -103,6 +150,13 @@ class Pack:
                 raise ValueError(f"Item grants require a one-time rule at the item's source {key}")
             granted_items.update(rule.gives)
             rules[key] = rule
+        for evidence in facts.values():
+            if evidence.witness and (evidence.location, Command("talk", evidence.witness)) not in rules:
+                raise ValueError(f"No conversation at the source of evidence {evidence.id}")
+        characters = {command.target for _, command in rules if command.verb == "talk"}
+        for evidence in facts.values():
+            if not evidence.subjects <= characters:
+                raise ValueError(f"Unknown character in evidence {evidence.id}")
         return cls(data["id"], data["version"], data["title"], data["start"],
                    data["goal"], locations, facts, items, rules, gates,
                    {location: tuple(symbols) for location, symbols in data.get("puzzle_symbols", {}).items()},
@@ -112,8 +166,23 @@ class Pack:
         return State(self.start)
 
     def journal(self, state: State) -> list[str]:
-        return [f"{fact['kind']}: {fact['text']}" for key, fact in self.facts.items()
-                if key in state.flags]
+        return [f"{entry.kind}: {entry.text}" for entry in self.evidence(state)]
+
+    def evidence(self, state: State) -> list[Evidence]:
+        return [fact for key, fact in self.facts.items() if key in state.flags]
+
+    def characters(self) -> list[Character]:
+        locations_by_npc: dict[str, list[str]] = {}
+        for location, command in self.rules:
+            if command.verb == "talk":
+                locations_by_npc.setdefault(command.target, []).append(location)
+        return [
+            Character(npc, self.dialogue_style.get(npc, {}).get("name", npc.title()), tuple(locations))
+            for npc, locations in locations_by_npc.items()
+        ]
+
+    def character_evidence(self, state: State, npc: str) -> list[Evidence]:
+        return [entry for entry in self.evidence(state) if entry.witness == npc or npc in entry.subjects]
 
     def step(self, state: State, command: Command) -> Turn:
         if command.verb == "move":

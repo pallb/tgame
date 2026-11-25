@@ -49,8 +49,11 @@ class AshenfellTest(unittest.TestCase):
                     self.assertEqual(resumed, middle)
                     self.assertEqual(resumed.inventory, {key})
                     self.assertFalse(any("ledger" in line for line in self.pack.journal(resumed)))
+                    self.assertNotIn("ledger", {entry.id for entry in self.pack.evidence(resumed)})
                     final = self.advance(resumed, ending, save)
                     self.assertIn(self.pack.goal, final.flags)
+                    ledger = next(entry for entry in self.pack.evidence(final) if entry.id == "ledger")
+                    self.assertEqual((ledger.certainty, ledger.source), ("recorded", "Merchant's ledger"))
                     self.assertEqual(final, save.load_or_start(self.pack))
                     self.assertEqual(final, self.advance(self.pack.start_state(), route + ending))
                 finally:

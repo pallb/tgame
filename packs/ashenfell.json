@@ -116,16 +116,63 @@
   },
   "flags": ["garrick_helped", "box_open", "cellar_open", "resolved"],
   "facts": {
-    "horses": {"kind": "Testimony", "text": "Garrick heard horses by the river last night."},
-    "letter": {"kind": "Evidence", "text": "The burned letter bears Garrick's seal and warns the merchant to hide until morning."},
-    "closed_road": {"kind": "Testimony", "text": "Mara believes the merchant fled along the north road."},
-    "ledger": {"kind": "Evidence", "text": "The ledger records a canceled north-road shipment and a delivery to the riverside cellar."},
-    "nessa_delivery": {"kind": "Testimony", "text": "Nessa says the merchant collected a new lantern before dusk."},
-    "docket": {"kind": "Evidence", "text": "The forge docket lists the lantern as paid for and delivered."},
-    "nessa_seal": {"kind": "Testimony", "text": "After seeing the docket, Nessa confirms Garrick sealed a warning addressed to the merchant."},
-    "ivo_patrol": {"kind": "Testimony", "text": "Ivo says the riders turned around at the north gate."},
-    "patrol": {"kind": "Evidence", "text": "The patrol log shows the north gate was barred throughout the storm."},
-    "ivo_lantern": {"kind": "Testimony", "text": "After checking the patrol log, Ivo recalls a light moving downhill toward the landing."}
+    "horses": {
+      "title": "Horses by the river", "kind": "Testimony", "certainty": "firsthand",
+      "source": "Garrick", "location": "inn", "witness": "garrick",
+      "question": "What did you hear by the river?",
+      "text": "Garrick heard horses by the river last night."
+    },
+    "letter": {
+      "title": "The burned letter", "kind": "Evidence", "certainty": "recorded",
+      "source": "Burned letter", "location": "inn", "subjects": ["garrick"],
+      "text": "The burned letter bears Garrick's seal and warns the merchant to hide until morning."
+    },
+    "closed_road": {
+      "title": "The north-road theory", "kind": "Testimony", "certainty": "guess",
+      "source": "Mara", "location": "river", "witness": "mara",
+      "question": "Which road do you think the merchant took?",
+      "text": "Mara believes the merchant fled along the north road."
+    },
+    "ledger": {
+      "title": "The shipping ledger", "kind": "Evidence", "certainty": "recorded",
+      "source": "Merchant's ledger", "location": "cellar",
+      "text": "The ledger records a canceled north-road shipment and a delivery to the riverside cellar."
+    },
+    "nessa_delivery": {
+      "title": "The merchant's lantern", "kind": "Testimony", "certainty": "reported",
+      "source": "Nessa", "location": "forge", "witness": "nessa",
+      "question": "What did the merchant pick up?",
+      "text": "Nessa says the merchant collected a new lantern before dusk."
+    },
+    "docket": {
+      "title": "The forge docket", "kind": "Evidence", "certainty": "recorded",
+      "source": "Forge delivery docket", "location": "forge",
+      "text": "The forge docket lists the lantern as paid for and delivered."
+    },
+    "nessa_seal": {
+      "title": "Who sealed the warning", "kind": "Testimony", "certainty": "reported",
+      "source": "Nessa, after examining the docket", "location": "forge", "witness": "nessa",
+      "subjects": ["garrick"],
+      "question": "Who sealed the merchant's warning?",
+      "text": "After seeing the docket, Nessa confirms Garrick sealed a warning addressed to the merchant."
+    },
+    "ivo_patrol": {
+      "title": "Riders at the north gate", "kind": "Testimony", "certainty": "firsthand",
+      "source": "Ivo", "location": "watch", "witness": "ivo",
+      "question": "What did the riders do at the north gate?",
+      "text": "Ivo says the riders turned around at the north gate."
+    },
+    "patrol": {
+      "title": "The patrol log", "kind": "Evidence", "certainty": "recorded",
+      "source": "North gate patrol log", "location": "watch",
+      "text": "The patrol log shows the north gate was barred throughout the storm."
+    },
+    "ivo_lantern": {
+      "title": "A light on the hillside", "kind": "Testimony", "certainty": "firsthand",
+      "source": "Ivo, after checking the patrol log", "location": "watch", "witness": "ivo",
+      "question": "Which way did the light move?",
+      "text": "After checking the patrol log, Ivo recalls a light moving downhill toward the landing."
+    }
   },
   "items": {
     "cellar_key": {"name": "Cellar key", "source": "garrick"},

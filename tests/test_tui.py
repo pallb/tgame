@@ -81,9 +81,10 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             def choose(self, question, replies, *, prompt):
                 return "introduce"
 
-            def rewrite(self, question, evidence, npc, voice, protected, facts):
+            def rewrite(self, question, evidence, npc, voice, protected, facts, sources):
                 self.evidence = evidence
                 self.facts = facts
+                self.sources = sources
                 return "Horses down by the river last night. Heard them myself."
 
         provider = Provider()
@@ -93,6 +94,7 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             await game.dialogue_worker.wait()
             self.assertIn("I heard horses near the river", provider.evidence)
             self.assertIn("When: last night", provider.facts[0])
+            self.assertEqual([(entry.id, entry.certainty) for entry in provider.sources], [("horses", "firsthand")])
             self.assertEqual(game.state.flags, {"horses"})
             self.assertFalse(game.state.inventory)
             self.assertTrue(game.save.recent_events(game.state.turn)[0][2].startswith("Garrick: Horses down"))
@@ -103,7 +105,7 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
                 self.replies = replies
                 return "topic_lockbox"
 
-            def rewrite(self, question, evidence, npc, voice, protected, facts):
+            def rewrite(self, question, evidence, npc, voice, protected, facts, sources):
                 return evidence
 
         from rpg.engine import Command
@@ -130,7 +132,7 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
                 self.calls.append((question, previous))
                 return "introduce" if previous is None else "unsure"
 
-            def rewrite(self, question, evidence, npc, voice, protected, facts):
+            def rewrite(self, question, evidence, npc, voice, protected, facts, sources):
                 return evidence
 
             calls = []
@@ -157,6 +159,66 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#local-actions", offset=(3, 2))
             self.assertIsInstance(game.screen, Conversation)
             self.assertTrue(any("How many were there?" in line.plain for line in game.screen.history))
+
+    async def test_evidence_board_labels_guess_and_opens_local_witness_question(self):
+        from textual.widgets import Button, Input, RichLog
+
+        from rpg.engine import Command
+        from rpg.tui import Conversation, EvidenceBoard
+
+        game = self.new_game(provider=object(), character_voice=True, show_startup=False)
+        async with game.run_test(size=(80, 24)) as pilot:
+            game.apply_command(Command("move", "river"))
+            game.apply_command(Command("talk", "mara"))
+            game.apply_command(Command("move", "inn"))
+            await pilot.press("f3")
+            self.assertIsInstance(game.screen, EvidenceBoard)
+            board = game.screen.query_one("#clues", RichLog)
+            text = " ".join(line.text for line in board.lines)
+            self.assertIn("Testimony · Guess", text)
+            self.assertIn("Source  Mara", text)
+            self.assertIn("River Landing", text)
+            self.assertTrue(game.screen.query_one("#evidence-ask", Button).disabled)
+            await pilot.press("escape")
+            game.apply_command(Command("move", "river"))
+            before = game.state
+            await pilot.press("f3")
+            await pilot.click("#evidence-ask")
+            self.assertIsInstance(game.screen, Conversation)
+            self.assertEqual(game.screen.npc, "mara")
+            self.assertEqual(game.screen.query_one("#question", Input).value,
+                             "Which road do you think the merchant took?")
+            self.assertEqual(game.state, before)
+
+    async def test_character_board_groups_discovered_clues_by_person(self):
+        from textual.widgets import Button, RichLog
+
+        from rpg.engine import Command
+        from rpg.tui import CharacterBoard, Conversation
+
+        game = self.new_game(provider=object(), character_voice=True, show_startup=False)
+        async with game.run_test(size=(80, 24)) as pilot:
+            game.apply_command(Command("inspect", "letter"))
+            game.apply_command(Command("move", "river"))
+            game.apply_command(Command("talk", "mara"))
+            before = game.state
+            await pilot.press("f6")
+            self.assertIsInstance(game.screen, CharacterBoard)
+            board = game.screen.query_one("#character-details", RichLog)
+            text = " ".join(line.text for line in board.lines)
+            self.assertIn("The Crooked Lantern", text)
+            self.assertIn("The burned letter", text)
+            self.assertNotIn("Horses by the river", text)
+            self.assertTrue(game.screen.query_one("#character-talk", Button).disabled)
+            await pilot.press("down")
+            text = " ".join(line.text for line in board.lines)
+            self.assertIn("River Landing · Here now", text)
+            self.assertIn("The north-road theory · Guess", text)
+            self.assertNotIn("The burned letter", text)
+            await pilot.click("#character-talk")
+            self.assertIsInstance(game.screen, Conversation)
+            self.assertEqual(game.screen.npc, "mara")
+            self.assertEqual(game.state, before)
 
     async def test_can_cancel_dialogue_and_open_map_while_model_waits(self):
         release = Event()
@@ -222,7 +284,10 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             board = game.screen.query_one(RichLog)
             lines = " ".join(line.text for line in board.lines)
             self.assertIn("Testimony", lines)
-            self.assertIn("Evidence", lines)
+            await pilot.press("down")
+            lines = " ".join(line.text for line in board.lines)
+            self.assertIn("Documented evidence", lines)
+            self.assertIn("Merchant's ledger", lines)
             await pilot.press("escape")
             await submit("move river")
             await submit("report mara")

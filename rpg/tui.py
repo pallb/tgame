@@ -13,7 +13,7 @@ from .__main__ import COMMAND_HELP
 from .dialogue import (
     VOICE_SELECTION_PROMPT, DialogueProvider, available_replies, conversation_topics, rewrite_choice,
 )
-from .engine import Command, Pack, State
+from .engine import Character, Command, Evidence, Pack, State
 from .saves import Save
 from .splash import Startup
 
@@ -121,34 +121,125 @@ class Lockbox(AdventurePanel):
 
 
 class EvidenceBoard(AdventurePanel):
-    def __init__(self, entries: list[str]):
+    def __init__(self, pack: Pack, state: State, can_converse: bool):
         super().__init__()
-        self.entries = entries
+        self.pack = pack
+        self.state = state
+        self.can_converse = can_converse
+        self.entries = pack.evidence(state)
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="panel"):
+        with Vertical(classes="panel reference-board"):
             yield Static("Evidence board", classes="panel_title")
-            yield RichLog(wrap=True, id="clues")
+            if self.entries:
+                with Horizontal(classes="reference-body"):
+                    yield OptionList(*(Text(entry.title) for entry in self.entries),
+                                     id="evidence-list", classes="reference-list")
+                    yield RichLog(wrap=True, id="clues", classes="reference-details")
+                yield Button("Ask witness", id="evidence-ask", variant="primary", disabled=True)
+            else:
+                yield Static("No clues discovered yet.")
             yield Footer()
 
     def on_mount(self):
+        if self.entries:
+            self.show_entry(self.entries[0])
+            self.query_one("#evidence-list", OptionList).focus()
+
+    def show_entry(self, entry: Evidence):
         board = self.query_one("#clues", RichLog)
-        for entry in self.entries or ["No clues discovered yet."]:
-            kind, _, detail = entry.partition(": ")
-            line = Text()
-            if detail:
-                line.append(f"{kind}  ", style="bold #e4bd73" if kind == "Evidence" else "bold #8bb498")
-            line.append(detail or kind)
-            board.write(line)
+        board.clear()
+        color = "#e4bd73" if entry.kind == "Evidence" else "#8bb498"
+        board.write(Text(f"{entry.kind} · {entry.certainty_label}", style=f"bold {color}"))
+        if entry.source:
+            board.write(Text(f"Source  {entry.source}"))
+        if entry.location:
+            location = self.pack.locations[entry.location]["name"]
+            board.write(Text(f"Location  {location}"))
+        board.write(Text(entry.text))
+        link = self.query_one("#evidence-ask", Button)
+        link.label = f"Ask {entry.witness.title()}" if entry.witness else "Ask witness"
+        link.disabled = not (self.can_converse and entry.witness and entry.location == self.state.location)
+        if entry.witness and entry.question:
+            board.write(Text(f"Follow-up  {entry.question}", style="#8bb498"))
+            if entry.location != self.state.location:
+                board.write(Text(f"Find {entry.witness.title()} at {location} to ask."))
         board.scroll_home(animate=False)
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted):
+        self.show_entry(self.entries[event.option_index])
+
+    def on_button_pressed(self, event: Button.Pressed):
+        selected = self.query_one("#evidence-list", OptionList).highlighted
+        if event.button.id == "evidence-ask" and selected is not None:
+            entry = self.entries[selected]
+            if self.can_converse and entry.witness and entry.location == self.state.location:
+                self.dismiss(entry)
+
+
+class CharacterBoard(AdventurePanel):
+    def __init__(self, pack: Pack, state: State, can_converse: bool):
+        super().__init__()
+        self.pack = pack
+        self.state = state
+        self.can_converse = can_converse
+        self.characters = pack.characters()
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="panel reference-board"):
+            yield Static("Characters", classes="panel_title")
+            if self.characters:
+                with Horizontal(classes="reference-body"):
+                    yield OptionList(*(Text(character.name) for character in self.characters),
+                                     id="character-list", classes="reference-list")
+                    yield RichLog(wrap=True, id="character-details", classes="reference-details")
+                yield Button("Talk", id="character-talk", variant="primary", disabled=True)
+            else:
+                yield Static("There are no characters to list.")
+            yield Footer()
+
+    def on_mount(self):
+        if self.characters:
+            self.show_character(self.characters[0])
+            self.query_one("#character-list", OptionList).focus()
+
+    def show_character(self, character: Character):
+        board = self.query_one("#character-details", RichLog)
+        board.clear()
+        board.write(Text(character.name, style="bold #e4bd73"))
+        locations = ", ".join(self.pack.locations[key]["name"] for key in character.locations)
+        nearby = self.state.location in character.locations
+        board.write(Text(f"Find at  {locations}" + (" · Here now" if nearby else ""), style="#8bb498"))
+        board.write(Text("What you've learned", style="bold"))
+        entries = self.pack.character_evidence(self.state, character.id)
+        if not entries:
+            board.write(Text("No clues learned yet."))
+        for entry in entries:
+            board.write(Text(f"{entry.title} · {entry.certainty_label}", style="#8bb498"))
+            board.write(Text(entry.text))
+        board.scroll_home(animate=False)
+        button = self.query_one("#character-talk", Button)
+        button.label = f"Talk to {character.name}"
+        button.disabled = not (self.can_converse and nearby)
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted):
+        self.show_character(self.characters[event.option_index])
+
+    def on_button_pressed(self, event: Button.Pressed):
+        selected = self.query_one("#character-list", OptionList).highlighted
+        if event.button.id == "character-talk" and selected is not None:
+            character = self.characters[selected]
+            if self.can_converse and self.state.location in character.locations:
+                self.dismiss(character)
 
 
 class Conversation(AdventurePanel):
-    def __init__(self, npc: str, topics: list[tuple[str, str]], history: list[Text]):
+    def __init__(self, npc: str, topics: list[tuple[str, str]], history: list[Text], question: str = ""):
         super().__init__()
         self.npc = npc
         self.topics = topics
         self.history = history
+        self.question = question
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="panel conversation"):
@@ -158,13 +249,15 @@ class Conversation(AdventurePanel):
                 with Vertical(id="conversation-topics"):
                     yield Static("Topics")
                     yield OptionList(*(Text(label) for label, _ in self.topics), id="topics")
-            yield Input(placeholder=f"Ask {self.npc.title()} a question", id="question")
+            yield Input(value=self.question, placeholder=f"Ask {self.npc.title()} a question", id="question")
             yield Footer()
 
     def on_mount(self):
         for line in self.history:
             self.query_one("#exchanges", RichLog).write(line)
-        self.query_one("#question", Input).focus()
+        field = self.query_one("#question", Input)
+        field.focus()
+        field.cursor_position = len(field.value)
 
     def write(self, line: Text):
         self.history.append(line)
@@ -194,6 +287,7 @@ class Adventure(App):
         Binding("f2", "map", "Map"),
         Binding("f3", "journal", "Evidence"),
         Binding("f4", "puzzle", "Lockbox"),
+        Binding("f6", "characters", "Characters"),
         Binding("ctrl+q", "quit", "Quit"),
         Binding("escape", "cancel_dialogue", show=False),
         Binding("up", "history_up", show=False),
@@ -221,7 +315,10 @@ class Adventure(App):
     #lock-feedback { height: auto; }
     #lock-controls { height: auto; }
     #lock-controls Button { min-width: 7; margin-right: 1; }
-    #clues { height: 10; padding: 0 1; }
+    .reference-board { width: 86; }
+    .reference-body { height: 11; }
+    .reference-board .reference-list { width: 35%; min-width: 18; height: 100%; max-height: 100%; }
+    .reference-details { width: 1fr; height: 100%; padding: 0 1; border-left: solid #49644c; }
     .conversation { width: 86; height: 20; }
     #conversation-body { height: 1fr; min-height: 3; }
     #exchanges { width: 1fr; padding: 0 1; }
@@ -258,7 +355,7 @@ class Adventure(App):
                 yield Input(placeholder="Type a command or /help", id="command")
             with Vertical(id="sidebar"):
                 yield Static("Views")
-                yield OptionList("Map", "Evidence board", "Inventory", id="views")
+                yield OptionList("Map", "Evidence board", "Inventory", "Characters", id="views")
                 yield Static("Actions here")
                 yield OptionList(id="local-actions")
         yield Footer()
@@ -334,7 +431,21 @@ class Adventure(App):
         self.push_screen(TravelMap(self.pack, self.state), self.apply_command)
 
     def action_journal(self):
-        self.push_screen(EvidenceBoard(self.pack.journal(self.state)))
+        can_converse = self.provider is not None and self.pack.goal not in self.state.flags
+        self.push_screen(EvidenceBoard(self.pack, self.state, can_converse), self.follow_evidence)
+
+    def action_characters(self):
+        can_converse = self.provider is not None and self.pack.goal not in self.state.flags
+        self.push_screen(CharacterBoard(self.pack, self.state, can_converse), self.follow_character)
+
+    def follow_character(self, character: Character | None):
+        if character is not None and self.state.location in character.locations and self.pack.goal not in self.state.flags:
+            self.open_conversation(Command("talk", character.id))
+
+    def follow_evidence(self, entry: Evidence | None):
+        if (entry is not None and entry.id in self.state.flags and entry.witness
+                and self.state.location == entry.location and self.pack.goal not in self.state.flags):
+            self.open_conversation(Command("talk", entry.witness), question=entry.question or "")
 
     def action_puzzle(self):
         symbols = self.pack.puzzle_symbols.get(self.state.location)
@@ -343,7 +454,7 @@ class Adventure(App):
         else:
             self.write("There is no lockbox here.")
 
-    def open_conversation(self, command: Command):
+    def open_conversation(self, command: Command, *, question: str = ""):
         preview = self.pack.step(self.state, command)
         if not preview.accepted:
             self.write(preview.message)
@@ -351,7 +462,7 @@ class Adventure(App):
         npc = command.target
         replies = available_replies(self.pack, self.state, npc, preview.message, focus=self.character_voice)
         topics = conversation_topics(npc, replies, self.pack)
-        self.push_screen(Conversation(npc, topics, self.conversation_history.setdefault(npc, [])))
+        self.push_screen(Conversation(npc, topics, self.conversation_history.setdefault(npc, []), question))
 
     def browse_history(self, offset: int):
         field = self.query_one(Input)
@@ -383,7 +494,7 @@ class Adventure(App):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected):
         if event.option_list.id == "views":
-            self.dispatch(Command(("map", "journal", "inventory")[event.option_index], ""))
+            self.dispatch(Command(("map", "journal", "inventory", "characters")[event.option_index], ""))
         elif event.option_list.id == "local-actions":
             self.dispatch(self.local_actions[event.option_index])
 
@@ -395,12 +506,14 @@ class Adventure(App):
                 self.action_map()
             case "journal":
                 self.action_journal()
+            case "characters":
+                self.action_characters()
             case "puzzle":
                 self.action_puzzle()
             case "try" if command.target == "lockbox":
                 self.action_puzzle()
             case "help":
-                self.write(COMMAND_HELP + "\n/map, /journal and /puzzle open interactive views."
+                self.write(COMMAND_HELP + "\n/map, /journal, /characters and /puzzle open interactive views."
                            "\nType try lockbox at the river landing to open the puzzle."
                            "\n/ask <person> <question> opens dialogue. Esc cancels a pending reply.")
             case "look":
@@ -472,7 +585,9 @@ class Adventure(App):
             if self.character_voice and choice != "unsure" and self.state == snapshot:
                 line = replies[choice]
                 try:
-                    line = await asyncio.to_thread(rewrite_choice, self.provider, self.pack, npc, choice, question[:1000], line)
+                    line = await asyncio.to_thread(
+                        rewrite_choice, self.provider, self.pack, snapshot, npc, choice, question[:1000], line
+                    )
                 except (OSError, ValueError, KeyError, TypeError, AttributeError):
                     self.write("Voice rewrite unavailable. Using the scripted reply.", "#8bb498")
                 if line != greeting:
