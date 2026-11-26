@@ -119,6 +119,8 @@ python -m unittest discover -s tests -v
 
 ## Author a pack
 
+Read the [Mystery Studio README](docs/studio/README.md) for the controls or follow the [quick guide to build a mystery from a short story brief](docs/studio/quickstart.md).
+
 Open Mystery Studio from the checkout with `.\play.cmd --studio`. You can also open a project directly.
 
 ```powershell
