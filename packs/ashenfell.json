@@ -28,6 +28,8 @@
     "mara": {
       "voice": "A matter-of-fact village warden. Direct and watchful, with a rural turn of phrase.",
       "name": "Mara",
+      "retire_introduction_on": "mara_retraction",
+      "recall_questions": {"recall_mara_retraction": "What changed your mind about the north road?"},
       "opening_question": "Which road do you think the merchant took?",
       "focused_introduction": "I reckon the merchant took the north road.",
       "topics": {
@@ -90,26 +92,31 @@
   "locations": {
     "inn": {
       "name": "The Crooked Lantern",
+      "map": [1, 0], "map_label": "Inn",
       "description": "Rain taps against the windows. Garrick sits by the fire. A burned letter lies on the hearth.",
       "exits": ["river", "forge"]
     },
     "river": {
       "name": "River Landing",
+      "map": [1, 1], "map_label": "Landing",
       "description": "Warden Mara watches a shuttered cellar. Beside its door is a lockbox engraved with a reed, a moon, and a fish.",
       "exits": ["inn", "cellar", "watch"]
     },
     "cellar": {
       "name": "Merchant's Cellar",
+      "map": [1, 2], "map_label": "Cellar",
       "description": "The merchant is shivering but alive. A shipping ledger lies open beside him.",
       "exits": ["river"]
     },
     "forge": {
       "name": "Village Forge",
+      "map": [0, 0], "map_label": "Forge",
       "description": "Nessa is banking the coals. A delivery docket hangs above the workbench.",
       "exits": ["inn"]
     },
     "watch": {
       "name": "North Road Watch",
+      "map": [2, 1], "map_label": "Watch",
       "description": "Watchman Ivo stands beside a snuffed lantern. A patrol log rests on the rail.",
       "exits": ["river"]
     }
@@ -131,22 +138,26 @@
       "title": "The north-road theory", "kind": "Testimony", "certainty": "guess",
       "source": "Mara", "location": "river", "witness": "mara",
       "question": "Which road do you think the merchant took?",
+      "links": {"patrol": "challenges", "ledger": "challenges"},
       "text": "Mara believes the merchant fled along the north road."
     },
     "ledger": {
       "title": "The shipping ledger", "kind": "Evidence", "certainty": "recorded",
       "source": "Merchant's ledger", "location": "cellar",
+      "links": {"closed_road": "challenges"},
       "text": "The ledger records a canceled north-road shipment and a delivery to the riverside cellar."
     },
     "nessa_delivery": {
       "title": "The merchant's lantern", "kind": "Testimony", "certainty": "reported",
       "source": "Nessa", "location": "forge", "witness": "nessa",
       "question": "What did the merchant pick up?",
+      "links": {"docket": "supports", "ivo_lantern": "unresolved"},
       "text": "Nessa says the merchant collected a new lantern before dusk."
     },
     "docket": {
       "title": "The forge docket", "kind": "Evidence", "certainty": "recorded",
       "source": "Forge delivery docket", "location": "forge",
+      "links": {"nessa_delivery": "supports"},
       "text": "The forge docket lists the lantern as paid for and delivered."
     },
     "nessa_seal": {
@@ -165,13 +176,22 @@
     "patrol": {
       "title": "The patrol log", "kind": "Evidence", "certainty": "recorded",
       "source": "North gate patrol log", "location": "watch",
+      "links": {"closed_road": "challenges", "mara_retraction": "supports"},
       "text": "The patrol log shows the north gate was barred throughout the storm."
     },
     "ivo_lantern": {
       "title": "A light on the hillside", "kind": "Testimony", "certainty": "firsthand",
       "source": "Ivo, after checking the patrol log", "location": "watch", "witness": "ivo",
       "question": "Which way did the light move?",
+      "links": {"nessa_delivery": "unresolved"},
       "text": "After checking the patrol log, Ivo recalls a light moving downhill toward the landing."
+    },
+    "mara_retraction": {
+      "title": "Mara revises her theory", "kind": "Testimony", "certainty": "reported",
+      "source": "Mara, after reviewing the patrol log", "location": "river", "witness": "mara",
+      "question": "What changed your mind about the north road?",
+      "links": {"patrol": "supports", "closed_road": "challenges"},
+      "text": "Mara withdraws her north-road guess after seeing the patrol log. The north gate was barred during the storm."
     }
   },
   "items": {
@@ -191,15 +211,23 @@
     },
     {
       "location": "inn", "verb": "show", "target": "garrick",
-      "requires": ["letter"], "sets": ["garrick_helped"], "once": "garrick_helped",
+      "accepts_evidence": ["letter", "nessa_seal"], "sets": ["garrick_helped"], "once": "garrick_helped",
       "gives": ["cellar_key"],
-      "message": "Garrick recognizes his seal and hands you the key. 'Try the cellar by the landing.'",
+      "message": "Garrick accepts your evidence and hands you the key. 'Try the cellar by the landing.'",
       "blocked": "You have nothing to show Garrick."
     },
     {
       "location": "river", "verb": "talk", "target": "mara",
       "message": "Mara says, 'I reckon he took the north road. The lockbox will open if you follow the old rhyme. Reeds grow first, then the moon rises, then the fish come up to feed.'",
-      "sets": ["closed_road"]
+      "sets": ["closed_road"],
+      "after": {"mara_retraction": "Mara says, 'I remember the log you showed me. The north gate was barred. My north-road guess doesn't hold.'"}
+    },
+    {
+      "location": "river", "verb": "show", "target": "mara",
+      "requires": ["closed_road"], "accepts_evidence": ["patrol"],
+      "sets": ["mara_retraction"], "once": "mara_retraction",
+      "message": "Mara studies the log. 'Aye, the north gate was barred during the storm. I was only guessing about the north road. I take it back.'",
+      "blocked": "Ask Mara about the north road and find a record that challenges her theory."
     },
     {
       "location": "river", "verb": "solve", "target": "reed moon fish",
@@ -230,7 +258,7 @@
     },
     {
       "location": "forge", "verb": "show", "target": "nessa",
-      "requires": ["docket"], "sets": ["nessa_seal"], "once": "nessa_seal",
+      "accepts_evidence": ["docket"], "sets": ["nessa_seal"], "once": "nessa_seal",
       "message": "Nessa taps the seal. 'Garrick used that stamp on a warning for the merchant.'",
       "blocked": "Nessa asks what you'd like her to look at."
     },
@@ -246,7 +274,7 @@
     },
     {
       "location": "watch", "verb": "show", "target": "ivo",
-      "requires": ["patrol"], "sets": ["ivo_lantern"], "once": "ivo_lantern",
+      "accepts_evidence": ["patrol"], "sets": ["ivo_lantern"], "once": "ivo_lantern",
       "message": "Ivo checks the time. 'That's when I saw a lantern heading downhill toward the landing.'",
       "blocked": "Ivo asks what you'd like him to check."
     },

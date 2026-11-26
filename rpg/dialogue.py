@@ -41,9 +41,13 @@ def available_replies(pack: Pack, state: State, npc: str, greeting: str,
     if rule and rule.once in state.flags:
         for fact in sorted(rule.sets & pack.facts.keys() & state.flags):
             replies[f"recall_{fact}"] = pack.facts[fact].text
+    style = pack.dialogue_style.get(npc, {})
+    retired = style.get("retire_introduction_on") in state.flags
+    if retired:
+        del replies["introduce"]
     if focus:
-        style = pack.dialogue_style.get(npc, {})
-        replies["introduce"] = style.get("focused_introduction", greeting)
+        if not retired:
+            replies["introduce"] = style.get("focused_introduction", greeting)
         if "name" in style:
             replies["name"] = f"My name is {style['name']}."
         for topic_id, topic in style.get("topics", {}).items():
@@ -59,7 +63,7 @@ def available_replies(pack: Pack, state: State, npc: str, greeting: str,
 
 def conversation_topics(npc: str, replies: dict[str, str], pack: Pack) -> list[tuple[str, str]]:
     style = pack.dialogue_style.get(npc, {})
-    topics = [("What you know", style.get("opening_question", "What do you know about the merchant?"))]
+    topics = [("What you know", style.get("opening_question", "What do you know about the merchant?"))] if "introduce" in replies else []
     for topic_id, topic in style.get("topics", {}).items():
         question = topic.get("question")
         if question and f"topic_{topic_id}" in replies:

@@ -84,7 +84,8 @@ def measured(profile, provider, pack, cases, review_cases, output):
             if expected not in replies:
                 raise ValueError(f"Expected unavailable reply {expected} in {case_id}")
             row = {"type": "selection", "profile": profile, "id": case_id, "npc": npc,
-                   "question": question, "expected": expected}
+                   "question": question, "expected": expected, "available_replies": replies,
+                   "flags": sorted(state.flags), "inventory": sorted(state.inventory)}
             started = monotonic()
             try:
                 choice = provider.choose(question, replies, prompt=VOICE_SELECTION_PROMPT, previous=previous)

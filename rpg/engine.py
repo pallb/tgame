@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 
@@ -23,6 +23,7 @@ class Evidence:
     witness: str | None
     question: str | None
     subjects: frozenset[str]
+    links: tuple[tuple[str, str], ...]
 
     @property
     def certainty_label(self) -> str:
@@ -43,11 +44,19 @@ class Character:
 
 
 @dataclass(frozen=True)
+class Presentation:
+    npc: str
+    evidence: str
+    turn: int
+
+
+@dataclass(frozen=True)
 class State:
     location: str
     flags: frozenset[str] = frozenset()
     inventory: frozenset[str] = frozenset()
     turn: int = 0
+    presentations: tuple[Presentation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,6 +79,8 @@ class Rule:
     consumes: frozenset[str]
     once: str | None
     blocked: str
+    accepts_evidence: frozenset[str]
+    after: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -107,14 +118,23 @@ class Pack:
                 raise ValueError(f"Evidence {key} needs a witness, question and source location to link a conversation")
             facts[key] = Evidence(key, entry.get("title", key.replace("_", " ").capitalize()),
                                   entry["kind"], entry["text"], certainty, entry.get("source"),
-                                  location, witness, question, frozenset(entry.get("subjects", [])))
+                                  location, witness, question, frozenset(entry.get("subjects", [])),
+                                  tuple(entry.get("links", {}).items()))
         items = data["items"]
         flags = set(data["flags"]) | facts.keys()
         if data["start"] not in locations or data["goal"] not in flags:
             raise ValueError("Invalid start or goal")
+        map_points = set()
         for location in locations.values():
             if set(location["exits"]) - locations.keys():
                 raise ValueError("Exit references an unknown location")
+            if "map" in location:
+                point = location["map"]
+                if (not isinstance(point, list) or len(point) != 2
+                        or any(type(value) is not int or value < 0 for value in point)
+                        or tuple(point) in map_points):
+                    raise ValueError("Map coordinates must be unique pairs of nonnegative integers")
+                map_points.add(tuple(point))
         gates = {}
         for gate in data.get("gates", []):
             source, destination = edge = gate["from"], gate["to"]
@@ -134,12 +154,18 @@ class Pack:
                    ("requires", "needs_items", "needs_any_item", "sets", "gives", "consumes")},
                 once=entry.get("once"),
                 blocked=entry.get("blocked", "You can't do that yet."),
+                accepts_evidence=frozenset(entry.get("accepts_evidence", [])),
+                after=tuple(entry.get("after", {}).items()),
             )
             key = rule.location, rule.command
             if key in rules or rule.location not in locations or rule.command.verb == "move":
                 raise ValueError(f"Invalid or duplicate rule {key}")
             if (rule.requires | rule.sets) - flags:
                 raise ValueError(f"Unknown flag in rule {key}")
+            if any(flag not in flags for flag, _ in rule.after):
+                raise ValueError(f"Unknown conditional reply flag in rule {key}")
+            if rule.accepts_evidence and (rule.command.verb != "show" or rule.accepts_evidence - facts.keys()):
+                raise ValueError(f"Invalid evidence presentation rule {key}")
             if (rule.needs_items | rule.needs_any_item | rule.gives | rule.consumes) - items.keys():
                 raise ValueError(f"Unknown item in rule {key}")
             if rule.once is not None and rule.once not in rule.sets:
@@ -157,6 +183,10 @@ class Pack:
         for evidence in facts.values():
             if not evidence.subjects <= characters:
                 raise ValueError(f"Unknown character in evidence {evidence.id}")
+            if any(target not in facts or target == evidence.id
+                   or relation not in ("supports", "challenges", "related", "unresolved")
+                   for target, relation in evidence.links):
+                raise ValueError(f"Invalid evidence link in {evidence.id}")
         return cls(data["id"], data["version"], data["title"], data["start"],
                    data["goal"], locations, facts, items, rules, gates,
                    {location: tuple(symbols) for location, symbols in data.get("puzzle_symbols", {}).items()},
@@ -184,6 +214,18 @@ class Pack:
     def character_evidence(self, state: State, npc: str) -> list[Evidence]:
         return [entry for entry in self.evidence(state) if entry.witness == npc or npc in entry.subjects]
 
+    def related_evidence(self, state: State, entry: Evidence) -> list[tuple[str, Evidence]]:
+        if entry.id not in state.flags:
+            return []
+        return [(relation, self.facts[key]) for key, relation in entry.links if key in state.flags]
+
+    def presentable(self, state: State, npc: str) -> list[Evidence]:
+        rule = self.rules.get((state.location, Command("show", npc)))
+        if rule is None or rule.once in state.flags:
+            return []
+        return [entry for entry in self.evidence(state) if entry.id in rule.accepts_evidence
+                and self.step(state, Command("present", f"{npc} {entry.id}")).accepted]
+
     def step(self, state: State, command: Command) -> Turn:
         if command.verb == "move":
             if command.target not in self.locations[state.location]["exits"]:
@@ -191,8 +233,19 @@ class Pack:
             gate = self.gates.get((state.location, command.target))
             if gate is not None and gate not in state.flags:
                 return Turn(state, "The way is locked.", False)
-            return Turn(State(command.target, state.flags, state.inventory, state.turn + 1),
+            return Turn(replace(state, location=command.target, turn=state.turn + 1),
                         self.locations[command.target]["description"], True)
+
+        presentation = None
+        if command.verb == "present":
+            npc, separator, evidence = command.target.partition(" ")
+            if not separator or evidence not in self.facts or evidence not in state.flags:
+                return Turn(state, "Choose a clue you have already discovered.", False)
+            command = Command("show", npc)
+            rule = self.rules.get((state.location, command))
+            if rule is None or evidence not in rule.accepts_evidence:
+                return Turn(state, "That person can't use this clue here.", False)
+            presentation = Presentation(npc, evidence, state.turn + 1)
 
         rule = self.rules.get((state.location, command))
         if rule is None:
@@ -203,10 +256,15 @@ class Pack:
             return Turn(state, "You've already done that.", False)
         if (not rule.requires <= state.flags
                 or not (rule.needs_items | rule.consumes) <= state.inventory
-                or (rule.needs_any_item and not rule.needs_any_item & state.inventory)):
+                or (rule.needs_any_item and not rule.needs_any_item & state.inventory)
+                or (rule.accepts_evidence and not rule.accepts_evidence & state.flags)):
             return Turn(state, rule.blocked, False)
-        updated = State(
-            state.location, state.flags | rule.sets,
-            (state.inventory - rule.consumes) | rule.gives, state.turn + 1,
-        )
-        return Turn(updated, rule.message, True)
+        updated = replace(state, flags=state.flags | rule.sets,
+                          inventory=(state.inventory - rule.consumes) | rule.gives, turn=state.turn + 1)
+        if presentation is None and rule.accepts_evidence:
+            evidence = min(rule.accepts_evidence & state.flags)
+            presentation = Presentation(command.target, evidence, updated.turn)
+        if presentation:
+            updated = replace(updated, presentations=state.presentations + (presentation,))
+        message = next((line for flag, line in rule.after if flag in state.flags), rule.message)
+        return Turn(updated, message, True)

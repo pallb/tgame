@@ -17,12 +17,13 @@ python -m pip install -r requirements-tui.txt
 python -m rpg --tui --save ashenfell.sqlite3
 ```
 
-- **F2** or `/map` opens nearby routes. Select a destination with the arrow keys and press Enter.
-- **F3** or `/journal` opens the evidence board. Select a clue to see its source, location and certainty. In model-enabled play, **Ask witness** opens the conversation with a suggested question when that witness is nearby.
+- **F2** or `/map` shows your position, visited places, and locked routes. Select a nearby destination with the arrow keys and press Enter.
+- **F3** or `/journal` opens the evidence board. Select a clue to see its source, location and certainty. **Compare linked clue** brings up a related clue you have already discovered. In model-enabled play, **Ask witness** opens the conversation with a suggested question when that witness is nearby.
 - **F6** or `/characters` opens the character board. Select a person to see where to find them, their testimony, and discovered evidence about them. In model-enabled play, **Talk to** opens a conversation with a nearby character.
 - Click **Views** or **Actions here** entries in the sidebar to open a panel or run a command. You can also focus a menu with Tab and select an entry with Enter.
 - Type `try lockbox` or `/puzzle`, or press **F4**, to open the lockbox at the landing. Click the engravings or select them with the arrow keys and Enter. Click **Try combination** or press **F5** to test the slots. Use **Undo**, **Backspace**, or **Reset** to revise the attempt.
 - **Esc** closes a panel. **Up** and **Down** browse command history from the input. **Ctrl+Q** quits.
+- Type the start of a command and press **Right** to accept its suggested completion.
 
 The Textual interface and the plain prompt can resume the same save. Textual restores the last 50 saved actions in the transcript.
 
@@ -49,6 +50,8 @@ To try experimental character-voice dialogue:
 ```
 
 With `--character-voice`, 4B is selected by default. Click **Talk to** in the sidebar or type `talk <npc>` to open a conversation. Click a topic or type a question directly. A follow-up can refer to the last answered question in that panel. Esc closes the conversation and discards a pending reply. Recent exchanges stay available when you reopen the panel during the same game session. `/ask` remains available for a one-off question.
+
+Use **Show evidence** in the conversation panel to present a discovered clue the witness can use. The typed equivalent is `present <person> <clue-id>` in the main prompt or `present <clue-id>` inside the conversation. In scripted play, `/chat <person>` opens the same panel. NPCs remember what you show them after saving and resuming. For example, after asking about Mara's theory, you can show her the patrol log with `present mara patrol`.
 
 After selecting an approved reply, the model drafts different wording from the NPC's voice and the facts authored for that reply. The game checks protected phrases in order, then asks the model in a separate request to review the draft against the original authored reply. On rejection or a model error, the game uses the authored reply. `unsure` is displayed as authored. The engine applies the same clue and quest rules in either case. The model's review can miss changes in meaning, so this mode is opt-in. The debug file records the draft and review requests as separate entries.
 
@@ -80,6 +83,14 @@ To compare the current conversation pipeline with the installed 4B and Q4 8B pro
 ```
 
 This reruns 80 legacy cases and adds 12 cases for follow-ups and changing world state. It also checks 12 fixed candidate drafts for factual drift. The report includes end-to-end model time and GPU residency. Sampled peak GPU memory includes other GPU applications.
+
+Run the held-out release suite after dialogue or engine changes:
+
+```powershell
+.\play.cmd --release-check --output benchmarks/my-release-run
+```
+
+The report covers 108 questions grouped by story situation, six independent review cases, and 12 unauthorized commands. It measures selection, refusals, rewrites, model timings and specific locked-clue phrases. The phrase checks do not cover every possible paraphrase.
 
 ## Plain prompt
 

@@ -7,6 +7,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
+from textual.suggester import SuggestFromList
 from textual.widgets import Button, Footer, Input, OptionList, RichLog, Static
 
 from .__main__ import COMMAND_HELP
@@ -26,16 +27,55 @@ class AdventurePanel(ModalScreen):
 
 
 class TravelMap(AdventurePanel):
-    def __init__(self, pack: Pack, state: State):
+    def __init__(self, pack: Pack, state: State, visited: frozenset[str]):
         super().__init__()
         self.pack = pack
         self.state = state
         self.exits = pack.locations[state.location]["exits"]
+        self.visited = visited
+
+    def render_routes(self) -> Text | None:
+        if any("map" not in location for location in self.pack.locations.values()):
+            return None
+        points = {key: (x * 13 + 2, y * 2) for key, location in self.pack.locations.items()
+                  for x, y in (location["map"],)}
+        width = max(x for x, _ in points.values()) + 10
+        height = max(y for _, y in points.values()) + 1
+        grid = [[" "] * width for _ in range(height)]
+        for start, location in self.pack.locations.items():
+            x, y = points[start]
+            for end in location["exits"]:
+                if start not in self.visited and end not in self.visited:
+                    continue
+                xn, yn = points[end]
+                lo, hi = sorted((x, xn) if y == yn else (y, yn))
+                gate = self.pack.gates.get((start, end)) or self.pack.gates.get((end, start))
+                locked = gate is not None and gate not in self.state.flags
+                if y == yn:
+                    for i in range(lo + 9, hi):
+                        grid[y][i] = "─"
+                    if locked and hi - lo > 9:
+                        grid[y][hi - 2] = "×"
+                elif x == xn:
+                    for i in range(lo + 1, hi):
+                        grid[i][x] = "×" if locked else "│"
+        for key, (x, y) in points.items():
+            marker = "@" if key == self.state.location else "●" if key in self.visited else "?"
+            label = f"{marker} {self.pack.locations[key].get('map_label', key)[:7]}"
+            grid[y][x:x + len(label)] = label
+        scene = Text("\n".join("".join(row).rstrip() for row in grid))
+        scene.highlight_words(["@"], style="bold #e4bd73")
+        scene.highlight_words(["×"], style="bold #f2a78e")
+        return scene
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="panel"):
             yield Static("Map  /  Arrows select · Enter travels", classes="panel_title")
             yield Static(Text("  @ " + self.pack.locations[self.state.location]["name"]))
+            layout = self.render_routes()
+            if layout:
+                yield Static(layout, id="spatial-map")
+                yield Static("@ here   ● visited   ? unvisited   × locked")
             options = []
             for index, destination in enumerate(self.exits):
                 connector = "└─" if index == len(self.exits) - 1 else "├─"
@@ -136,7 +176,9 @@ class EvidenceBoard(AdventurePanel):
                     yield OptionList(*(Text(entry.title) for entry in self.entries),
                                      id="evidence-list", classes="reference-list")
                     yield RichLog(wrap=True, id="clues", classes="reference-details")
-                yield Button("Ask witness", id="evidence-ask", variant="primary", disabled=True)
+                with Horizontal(id="evidence-actions"):
+                    yield Button("Ask witness", id="evidence-ask", variant="primary", disabled=True)
+                    yield Button("Compare linked clue", id="evidence-compare", disabled=True)
             else:
                 yield Static("No clues discovered yet.")
             yield Footer()
@@ -164,6 +206,14 @@ class EvidenceBoard(AdventurePanel):
             board.write(Text(f"Follow-up  {entry.question}", style="#8bb498"))
             if entry.location != self.state.location:
                 board.write(Text(f"Find {entry.witness.title()} at {location} to ask."))
+        related = self.pack.related_evidence(self.state, entry)
+        self.query_one("#evidence-compare", Button).disabled = not related
+        if related:
+            relation, other = related[0]
+            board.write(Text(f"{relation.title()}  {other.title}", style="bold #e4bd73"))
+            board.write(Text(other.text))
+            for relation, other in related[1:]:
+                board.write(Text(f"{relation.title()}  {other.title}", style="#8bb498"))
         board.scroll_home(animate=False)
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted):
@@ -175,6 +225,14 @@ class EvidenceBoard(AdventurePanel):
             entry = self.entries[selected]
             if self.can_converse and entry.witness and entry.location == self.state.location:
                 self.dismiss(entry)
+        elif event.button.id == "evidence-compare" and selected is not None:
+            related = self.pack.related_evidence(self.state, self.entries[selected])
+            if related:
+                target = related[0][1]
+                options = self.query_one("#evidence-list", OptionList)
+                options.highlighted = self.entries.index(target)
+                options.focus()
+                self.show_entry(target)
 
 
 class CharacterBoard(AdventurePanel):
@@ -217,6 +275,8 @@ class CharacterBoard(AdventurePanel):
         for entry in entries:
             board.write(Text(f"{entry.title} · {entry.certainty_label}", style="#8bb498"))
             board.write(Text(entry.text))
+            for relation, other in self.pack.related_evidence(self.state, entry):
+                board.write(Text(f"{relation.title()}  {other.title}", style="#e4bd73"))
         board.scroll_home(animate=False)
         button = self.query_one("#character-talk", Button)
         button.label = f"Talk to {character.name}"
@@ -231,6 +291,21 @@ class CharacterBoard(AdventurePanel):
             character = self.characters[selected]
             if self.can_converse and self.state.location in character.locations:
                 self.dismiss(character)
+
+
+class PresentEvidence(AdventurePanel):
+    def __init__(self, npc: str, clues: list[Evidence]):
+        super().__init__()
+        self.npc, self.clues = npc, clues
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="panel"):
+            yield Static(f"Show evidence to {self.npc.title()}", classes="panel_title")
+            yield OptionList(*(Text(clue.title) for clue in self.clues))
+            yield Footer()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected):
+        self.dismiss(self.clues[event.option_index].id)
 
 
 class Conversation(AdventurePanel):
@@ -249,6 +324,8 @@ class Conversation(AdventurePanel):
                 with Vertical(id="conversation-topics"):
                     yield Static("Topics")
                     yield OptionList(*(Text(label) for label, _ in self.topics), id="topics")
+                    yield Button("Show evidence", id="show-evidence", disabled=True)
+            yield Static(id="witness-memory")
             yield Input(value=self.question, placeholder=f"Ask {self.npc.title()} a question", id="question")
             yield Footer()
 
@@ -258,6 +335,22 @@ class Conversation(AdventurePanel):
         field = self.query_one("#question", Input)
         field.focus()
         field.cursor_position = len(field.value)
+        self.refresh_evidence()
+
+    def refresh_evidence(self):
+        state, pack = self.app.state, self.app.pack
+        self.query_one("#show-evidence", Button).disabled = not pack.presentable(state, self.npc)
+        titles = [pack.facts[record.evidence].title for record in state.presentations if record.npc == self.npc]
+        self.query_one("#witness-memory", Static).update(Text("Already shown  " + ", ".join(titles) if titles else ""))
+        greeting = pack.step(state, Command("talk", self.npc)).message
+        replies = available_replies(pack, state, self.npc, greeting, focus=self.app.character_voice)
+        self.topics = conversation_topics(self.npc, replies, pack)
+        options = self.query_one("#topics", OptionList)
+        selected = options.highlighted or 0
+        options.clear_options()
+        options.add_options(Text(label) for label, _ in self.topics)
+        if self.topics:
+            options.highlighted = min(selected, len(self.topics) - 1)
 
     def write(self, line: Text):
         self.history.append(line)
@@ -269,12 +362,27 @@ class Conversation(AdventurePanel):
         question = event.value.strip()
         if question:
             event.input.clear()
-            self.app.ask(f"{self.npc} {question}")
+            if question.lower().startswith("present "):
+                self.present(question.split(maxsplit=1)[1].strip().lower())
+            else:
+                self.app.ask(f"{self.npc} {question}")
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected):
         event.stop()
         self.app.ask(f"{self.npc} {self.topics[event.option_index][1]}")
         self.query_one("#question", Input).focus()
+
+    def on_button_pressed(self, event: Button.Pressed):
+        if event.button.id == "show-evidence":
+            self.app.push_screen(PresentEvidence(self.npc, self.app.pack.presentable(self.app.state, self.npc)),
+                                 self.present)
+
+    def present(self, clue: str | None):
+        if clue is not None:
+            self.app.action_cancel_dialogue()
+            self.app.apply_command(Command("present", f"{self.npc} {clue}"))
+            self.refresh_evidence()
+            self.query_one("#question", Input).focus()
 
     def action_close(self):
         self.app.action_cancel_dialogue()
@@ -311,6 +419,7 @@ class Adventure(App):
         border: round #8aa986; background: #19231b; padding: 0 1; }
     .panel_title { height: auto; padding: 1 1; color: #e4bd73; text-style: bold; }
     .panel OptionList { height: auto; max-height: 10; }
+    #spatial-map { height: auto; padding: 0 1; }
     #slots { padding: 1 1; background: #353022; }
     #lock-feedback { height: auto; }
     #lock-controls { height: auto; }
@@ -319,12 +428,15 @@ class Adventure(App):
     .reference-body { height: 11; }
     .reference-board .reference-list { width: 35%; min-width: 18; height: 100%; max-height: 100%; }
     .reference-details { width: 1fr; height: 100%; padding: 0 1; border-left: solid #49644c; }
+    #evidence-actions { height: auto; }
     .conversation { width: 86; height: 20; }
     #conversation-body { height: 1fr; min-height: 3; }
     #exchanges { width: 1fr; padding: 0 1; }
     #conversation-topics { width: 29%; min-width: 17; padding: 0 1; border-left: solid #49644c; }
     #conversation-topics Static { height: 1; color: #e4bd73; }
     #conversation-topics #topics { height: 1fr; max-height: 100%; }
+    #show-evidence { width: 100%; }
+    #witness-memory { height: auto; color: #8bb498; }
     """
 
     def __init__(self, pack: Pack, save: Save, *, provider: DialogueProvider | None = None,
@@ -421,6 +533,17 @@ class Adventure(App):
             for command in self.local_actions
         )
         actions.highlighted = min(selected or 0, len(self.local_actions) - 1)
+        suggestions = ["look", "/map", "/journal", "/characters", "/inventory", "/help"]
+        suggestions.extend(f"move {exit_id}" for exit_id in self.pack.locations[self.state.location]["exits"])
+        for command in self.local_actions:
+            if command.verb == "puzzle":
+                suggestions.append("try lockbox")
+            elif command.target:
+                suggestions.append(f"{command.verb} {command.target}")
+                if command.verb == "show":
+                    suggestions.extend(f"present {command.target} {entry.id}"
+                                       for entry in self.pack.presentable(self.state, command.target))
+        main.query_one("#command", Input).suggester = SuggestFromList(suggestions, case_sensitive=False)
 
     def look(self):
         location = self.pack.locations[self.state.location]
@@ -428,7 +551,7 @@ class Adventure(App):
         self.write("Exits  " + ", ".join(location["exits"]), "#8bb498")
 
     def action_map(self):
-        self.push_screen(TravelMap(self.pack, self.state), self.apply_command)
+        self.push_screen(TravelMap(self.pack, self.state, self.save.visited(self.pack, self.state)), self.apply_command)
 
     def action_journal(self):
         can_converse = self.provider is not None and self.pack.goal not in self.state.flags
@@ -515,6 +638,7 @@ class Adventure(App):
             case "help":
                 self.write(COMMAND_HELP + "\n/map, /journal, /characters and /puzzle open interactive views."
                            "\nType try lockbox at the river landing to open the puzzle."
+                           "\nPress Right to accept a suggested command. /chat <person> opens a conversation."
                            "\n/ask <person> <question> opens dialogue. Esc cancels a pending reply.")
             case "look":
                 self.look()
@@ -523,6 +647,8 @@ class Adventure(App):
                 self.write(", ".join(names) or "Inventory is empty.")
             case "ask":
                 self.ask(command.target)
+            case "chat" if self.pack.goal not in self.state.flags:
+                self.open_conversation(Command("talk", command.target))
             case "talk" if self.provider and self.pack.goal not in self.state.flags:
                 self.open_conversation(command)
             case _:
@@ -595,7 +721,7 @@ class Adventure(App):
         if self.state != snapshot:
             self.write("The conversation ended before the reply arrived.", "#8bb498")
             return
-        if isinstance(self.screen, Conversation) and choice != "unsure":
+        if isinstance(self.screen, Conversation) and choice != "unsure" and choice in replies:
             self.previous_turn[npc] = {"question": question[:1000], "approved_reply": replies[choice]}
         if choice == "introduce":
             self.apply_command(command, dialogue=drafted)
@@ -617,6 +743,12 @@ class Adventure(App):
         except (ValueError, sqlite3.Error) as error:
             self.write(f"Could not save turn. {error}", "#f2a78e")
             return
+        if len(result.state.presentations) > len(self.state.presentations):
+            presentation = result.state.presentations[-1]
+            clue = self.pack.facts[presentation.evidence]
+            self.previous_turn[presentation.npc] = {
+                "question": f"I showed you {clue.title}.", "approved_reply": result.message,
+            }
         self.state = result.state
         self.write(result.message, "" if result.accepted else "#f2a78e")
         self.update_status()

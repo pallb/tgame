@@ -190,6 +190,34 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
                              "Which road do you think the merchant took?")
             self.assertEqual(game.state, before)
 
+    async def test_scripted_conversation_shows_evidence_and_board_follows_link(self):
+        from textual.widgets import RichLog, Static
+
+        from rpg.engine import Command
+        from rpg.tui import Conversation, EvidenceBoard, PresentEvidence
+
+        game = self.new_game(show_startup=False)
+        async with game.run_test(size=(90, 28)) as pilot:
+            for verb, target in [
+                ("move", "river"), ("talk", "mara"), ("move", "watch"),
+                ("inspect", "log"), ("move", "river"),
+            ]:
+                game.apply_command(Command(verb, target))
+            game.dispatch(Command("chat", "mara"))
+            await pilot.pause()
+            self.assertIsInstance(game.screen, Conversation)
+            await pilot.click("#show-evidence")
+            self.assertIsInstance(game.screen, PresentEvidence)
+            await pilot.press("enter")
+            self.assertIn("mara_retraction", game.state.flags)
+            self.assertIn("The patrol log", str(game.screen.query_one("#witness-memory", Static).content))
+            await pilot.press("escape", "f3")
+            self.assertIsInstance(game.screen, EvidenceBoard)
+            await pilot.click("#evidence-compare", offset=(4, 1))
+            await pilot.pause()
+            board = game.screen.query_one("#clues", RichLog)
+            self.assertIn("North gate patrol log", " ".join(line.text for line in board.lines))
+
     async def test_character_board_groups_discovered_clues_by_person(self):
         from textual.widgets import Button, RichLog
 
@@ -250,17 +278,25 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
 
         game = self.new_game(show_startup=False)
 
-        async with game.run_test(size=(80, 24)) as pilot:
+        async with game.run_test(size=(64, 22)) as pilot:
             async def submit(text):
                 field = game.query_one(Input)
                 field.focus()
                 field.value = text
                 await pilot.press("enter")
 
+            await pilot.press("m", "o", "v", "right")
+            self.assertEqual(game.query_one(Input).value, "move river")
             await pilot.click("#views", offset=(3, 1))
             self.assertIsInstance(game.screen, TravelMap)
             await pilot.press("enter")
             self.assertEqual(game.state.location, "river")
+            await pilot.press("f2")
+            spatial = str(game.screen.query_one("#spatial-map", Static).content)
+            self.assertIn("@ Landing", spatial)
+            self.assertIn("● Inn", spatial)
+            self.assertIn("×", spatial)
+            await pilot.press("escape")
             await submit("talk mara")
             await pilot.press("up")
             self.assertEqual(game.query_one(Input).value, "talk mara")

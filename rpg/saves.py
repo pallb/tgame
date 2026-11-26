@@ -2,7 +2,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .engine import Command, Pack, State, Turn
+from .engine import Command, Pack, Presentation, State, Turn
 
 
 class Save:
@@ -43,7 +43,17 @@ class Save:
             ).fetchone()
             if (pack_id, version) != (pack.id, pack.version):
                 raise ValueError("Save belongs to a different pack or pack version.")
-        return State(location, frozenset(json.loads(flags)), frozenset(json.loads(inventory)), turn)
+            rows = self.connection.execute(
+                "SELECT turn, target FROM events WHERE verb = 'present' AND turn <= ? ORDER BY turn", (turn,)
+            ).fetchall()
+            presented = tuple(Presentation(*target.split(" ", 1), event_turn) for event_turn, target in rows)
+        return State(location, frozenset(json.loads(flags)), frozenset(json.loads(inventory)), turn, presented)
+
+    def visited(self, pack: Pack, state: State) -> frozenset[str]:
+        rows = self.connection.execute(
+            "SELECT DISTINCT target FROM events WHERE verb = 'move' AND turn <= ?", (state.turn,)
+        ).fetchall()
+        return frozenset({pack.start, state.location, *(target for (target,) in rows)})
 
     def commit(self, previous: State, command: Command, result: Turn) -> None:
         if not result.accepted:
@@ -57,6 +67,9 @@ class Save:
             ).rowcount
             if changed != 1:
                 raise ValueError("Save changed in another session. Reopen it to continue.")
+            if len(state.presentations) > len(previous.presentations):
+                presentation = state.presentations[-1]
+                command = Command("present", f"{presentation.npc} {presentation.evidence}")
             self.connection.execute(
                 "INSERT INTO events VALUES (?, ?, ?, ?)",
                 (state.turn, command.verb, command.target, result.message),

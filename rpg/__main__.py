@@ -9,6 +9,7 @@ from .saves import Save
 
 COMMAND_HELP = (
     "look, move <location>, talk <person>, inspect <object>, show <person>, "
+    "present <person> <clue>, "
     "solve <symbols>, open <object>, report <person>, journal, inventory, quit"
 )
 
@@ -48,6 +49,10 @@ def play(pack: Pack, save: Save) -> None:
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["--release-check"]:
+        from .release_checks import main as release_checks
+
+        raise SystemExit(release_checks(sys.argv[2:]))
     if sys.argv[1:2] == ["--benchmark-voice"]:
         from .voice_benchmark import main as benchmark_voice
 

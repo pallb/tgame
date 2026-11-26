@@ -21,6 +21,43 @@ class AshenfellTest(unittest.TestCase):
             state = result.state
         return state
 
+    def test_showing_the_patrol_log_changes_maras_view_after_reload(self):
+        from rpg.dialogue import available_replies
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "game.sqlite3"
+            save = Save(path)
+            try:
+                state = self.advance(save.load_or_start(self.pack), [("move", "river"), ("talk", "mara")], save)
+                self.assertFalse(self.pack.step(state, Command("present", "mara patrol")).accepted)
+                state = self.advance(state, [
+                    ("move", "watch"), ("inspect", "log"), ("move", "river"), ("present", "mara patrol"),
+                ], save)
+            finally:
+                save.close()
+            save = Save(path)
+            try:
+                restored = save.load_or_start(self.pack)
+                self.assertEqual(restored, state)
+                self.assertEqual([(p.npc, p.evidence) for p in restored.presentations], [("mara", "patrol")])
+                self.assertEqual(save.visited(self.pack, restored), {"inn", "river", "watch"})
+                greeting = self.pack.step(restored, Command("talk", "mara")).message
+                self.assertIn("I remember the log", greeting)
+                replies = available_replies(self.pack, restored, "mara", greeting, focus=True)
+                self.assertNotIn("introduce", replies)
+                self.assertIn("recall_mara_retraction", replies)
+            finally:
+                save.close()
+
+    def test_nessas_testimony_can_unlock_garricks_key(self):
+        state = self.advance(self.pack.start_state(), [
+            ("move", "forge"), ("inspect", "docket"), ("present", "nessa docket"),
+            ("move", "inn"), ("present", "garrick nessa_seal"),
+        ])
+        self.assertNotIn("letter", state.flags)
+        self.assertIn("cellar_key", state.inventory)
+        self.assertEqual(state.presentations[-1].evidence, "nessa_seal")
+
     def test_both_routes_survive_save_and_resume(self):
         routes = {
             "cellar_key": [
