@@ -1,0 +1,9 @@
+Lantern at Low Tide
+
+The harbor warning light went dark as the tide rose. The player needs to discover what happened before another boat comes in.
+
+Lysa is a brisk harbor runner who heard the warning bell after the lamp went dark. Oren is a careful signal keeper who trusts records more than accusations. Start on the quay, then investigate the signal hut and the lamp storehouse.
+
+The author-only truth is that seawater cracked the lamp lens. Oren moved the lamp to the storehouse and rang the bell as a substitute warning. The tide chart and signal log support that account. Keep Lysa's observation separate from the documented record.
+
+Give the player two ways into the storehouse. They can show Oren the tide chart or solve the release puzzle. The ending should require the bell testimony and signal log. Keep the mystery short and playable with scripted replies.

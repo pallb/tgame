@@ -34,6 +34,9 @@ def play(pack: Pack, save: Save) -> None:
         if verb == "help":
             print(COMMAND_HELP)
         elif verb == "look":
+            scene = pack.scenes.get(state.location)
+            if scene:
+                print("\n".join(scene.ascii_rows))
             print(location["description"])
             print("Exits: " + ", ".join(location["exits"]))
         elif verb == "journal":
@@ -53,6 +56,11 @@ def main() -> None:
         from .release_checks import main as release_checks
 
         raise SystemExit(release_checks(sys.argv[2:]))
+    if sys.argv[1:2] == ["--author"]:
+        from .authoring import main as author
+
+        author(sys.argv[2:])
+        return
     if sys.argv[1:2] == ["--benchmark-voice"]:
         from .voice_benchmark import main as benchmark_voice
 
@@ -101,7 +109,7 @@ def main() -> None:
                 try:
                     from .tui import Adventure
                 except ModuleNotFoundError as error:
-                    if error.name != "textual":
+                    if error.name not in {"rich", "textual"}:
                         raise
                     parser.exit(1, "Install the TUI dependencies from requirements-tui.txt.\n")
                 Adventure(pack, save, provider=provider, character_voice=args.character_voice).run()
