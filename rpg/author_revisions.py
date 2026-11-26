@@ -54,13 +54,26 @@ def same(left, right) -> bool:
     return json.dumps(left, sort_keys=True, allow_nan=False) == json.dumps(right, sort_keys=True, allow_nan=False)
 
 
-def validate_project(project: dict, root: Path):
+def validate_project(project: dict, root: Path, *, no_art=False):
     if not isinstance(project, dict):
         raise ValueError("An author project must be an object.")
     for path in project.get("locks", []):
         at(project, pointer(path))
+    if no_art:
+        project = {key: value for key, value in project.items() if key != "art"}
     for variant in (None, *project.get("puzzle_variants", {})):
         compile_project(project, root=root, variant=variant)
+
+
+def check_locks(project: dict, updated: dict):
+    for locked in project.get("locks", []):
+        keys = pointer(locked)
+        try:
+            unchanged = same(at(project, keys), at(updated, keys))
+        except ValueError:
+            unchanged = False
+        if not unchanged:
+            raise ValueError(f"The revision changes the locked field {locked}.")
 
 
 def revise(original: bytes, proposal: dict, project_dir: Path, only: list[int] | None = None):
@@ -97,14 +110,7 @@ def revise(original: bytes, proposal: dict, project_dir: Path, only: list[int] |
         parent[child(parent, keys[-1])] = edit["after"]
         selected_paths.append(keys)
         changes.append((index, edit))
-    for locked in project.get("locks", []):
-        keys = pointer(locked)
-        try:
-            unchanged = same(at(project, keys), at(updated, keys))
-        except ValueError:
-            unchanged = False
-        if not unchanged:
-            raise ValueError(f"The proposal changes the locked field {locked}.")
+    check_locks(project, updated)
     validate_project(updated, project_dir)
     return updated, changes
 
@@ -152,6 +158,28 @@ def save_revision(project: Path, original: bytes, replacement: bytes):
         if temporary:
             temporary.unlink(missing_ok=True)
         lock.unlink(missing_ok=True)
+
+
+def commit_revision(project: Path, original: bytes, updated: dict) -> int:
+    versions = [json.loads(snapshot.read_bytes())["version"] for snapshot in snapshots(project)]
+    version = max([updated["version"], *versions]) + 1
+    save_revision(project, original, encode({**updated, "version": version}))
+    return version
+
+
+def restore_revision(project: Path, original: bytes, prefix: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{8,64}", prefix):
+        raise ValueError("Use a revision hash or at least eight characters from history.")
+    matches = [path for path in snapshots(project) if path.stem.startswith(prefix)]
+    if len(matches) != 1:
+        raise ValueError("The revision hash does not identify a unique saved snapshot.")
+    snapshot = matches[0]
+    restored = snapshot.read_bytes()
+    if digest(restored) != snapshot.stem:
+        raise ValueError("The saved revision has been modified.")
+    validate_project(json.loads(restored), project.parent)
+    save_revision(project, original, restored)
+    return snapshot.stem
 
 
 def prepare_prompt(source: Path, draft: bool, scopes: list[str], request: str) -> str:
@@ -249,17 +277,8 @@ def run(args):
         for snapshot in snapshots(project):
             print(f"{snapshot.stem}  saved  v{json.loads(snapshot.read_bytes())['version']}")
     elif args.action == "rollback":
-        if not re.fullmatch(r"[0-9a-f]{8,64}", args.to):
-            raise ValueError("Use a revision hash or at least eight characters from history.")
-        matches = [path for path in snapshots(project) if path.stem.startswith(args.to)]
-        if len(matches) != 1:
-            raise ValueError("The revision hash does not identify a unique saved snapshot.")
-        restored = matches[0].read_bytes()
-        if digest(restored) != matches[0].stem:
-            raise ValueError("The saved revision has been modified.")
-        validate_project(json.loads(restored), project.parent)
-        save_revision(project, original, restored)
-        print(f"Restored {matches[0].stem} and saved the displaced project in history.")
+        restored = restore_revision(project, original, args.to)
+        print(f"Restored {restored} and saved the displaced project in history.")
     else:
         proposal = json.loads(args.proposal.read_bytes())
         updated, changes = revise(original, proposal, project.parent, args.only)
@@ -267,7 +286,5 @@ def run(args):
         if args.action == "review":
             print("\nValid proposal. Use apply to accept the displayed edits.")
         else:
-            versions = [json.loads(snapshot.read_bytes())["version"] for snapshot in snapshots(project)]
-            updated["version"] = max([updated["version"], *versions]) + 1
-            save_revision(project, original, encode(updated))
-            print(f"\nAccepted {len(changes)} edits as version {updated['version']}.")
+            version = commit_revision(project, original, updated)
+            print(f"\nAccepted {len(changes)} edits as version {version}.")

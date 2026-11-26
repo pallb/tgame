@@ -119,4 +119,16 @@ python -m unittest discover -s tests -v
 
 ## Author a pack
 
+Open Mystery Studio from the checkout with `.\play.cmd --studio`. You can also open a project directly.
+
+```powershell
+.\play.cmd --studio authoring_examples/lantern_at_low_tide.json
+```
+
+Use **Projects** to start from a template or import a draft, then edit sections in **Design**. Save with **Ctrl+S** and press **F5** to build and play a fresh preview. Quit the preview with **Ctrl+Q** to return to Studio. **Playtest** lets you choose a puzzle variant, resume a preview during the current Studio session, validate every variant, view walkthroughs, and export a runtime pack. Use **Revisions** to review and apply proposals or restore a saved version.
+
+Studio uses `requirements-tui.txt`. Install `requirements-authoring.txt` for art, or select **Text-only build** to playtest without it.
+
+**Open project** starts in a file picker. Everywhere else that asks for a file path has a **Browse** button. Use the arrow keys and **Enter** or click a file or folder. For a new file, browse to the destination folder, enter the filename, and choose **Use this path**.
+
 Use the [pack authoring quickstart](docs/pack-authoring-quickstart.md) to validate, bake and play the included mystery. The [authoring plan](docs/pack-authoring-plan.md) tracks the planned asset pipeline and model-assisted revision workflow.

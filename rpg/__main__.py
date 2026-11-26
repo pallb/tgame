@@ -52,6 +52,18 @@ def play(pack: Pack, save: Save) -> None:
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["--studio"]:
+        parser = argparse.ArgumentParser(prog="python -m rpg --studio")
+        parser.add_argument("project", type=Path, nargs="?")
+        args = parser.parse_args(sys.argv[2:])
+        try:
+            from .studio import run_studio
+        except ModuleNotFoundError as error:
+            if error.name not in {"rich", "textual"}:
+                raise
+            parser.exit(1, "Install the TUI dependencies from requirements-tui.txt.\n")
+        run_studio(args.project)
+        return
     if sys.argv[1:2] == ["--release-check"]:
         from .release_checks import main as release_checks
 
@@ -71,7 +83,10 @@ def main() -> None:
 
         benchmark(sys.argv[2:])
         return
-    parser = argparse.ArgumentParser(description="Play a local terminal mystery.")
+    parser = argparse.ArgumentParser(
+        description="Play a local terminal mystery.",
+        epilog="Use --studio [project.json] to open the authoring workspace.",
+    )
     parser.add_argument("--pack", type=Path, default=Path("packs/ashenfell.json"))
     parser.add_argument("--save", type=Path, default=Path("ashenfell.sqlite3"))
     parser.add_argument("--tui", action="store_true", help="Open the Textual interface")

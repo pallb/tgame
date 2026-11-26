@@ -91,7 +91,7 @@ class ArtGallery(App[str | None]):
         self.exit()
 
 
-def preview_project(path: Path, asset_id: str):
+def preview_project(path: Path, asset_id: str, *, record_revision=False):
     path = path.resolve()
     original = path.read_bytes()
     project = json.loads(original.decode("utf-8"))
@@ -107,6 +107,17 @@ def preview_project(path: Path, asset_id: str):
     previews = {style: convert_image(source, **options, style=style) for style in ART_STYLES}
     chosen = ArtGallery(asset_id, previews, current).run()
     if chosen is None:
+        return
+    if record_revision:
+        from .author_revisions import check_locks, commit_revision, validate_project
+
+        if chosen == current:
+            return
+        entry["style"] = chosen
+        check_locks(json.loads(original), project)
+        validate_project(project, path.parent)
+        version = commit_revision(path, original, project)
+        print(f"Saved {ART_STYLES[chosen][0]} for {asset_id} as version {version}.")
         return
     entry["style"] = chosen
     save_project_style(path, original, project)

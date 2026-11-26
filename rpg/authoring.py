@@ -272,6 +272,7 @@ def main(argv=None):
     gallery = actions.add_parser("preview", help="Compare terminal art styles and save a choice to a project")
     gallery.add_argument("project", type=Path)
     gallery.add_argument("asset", help="The art entry's ID")
+    gallery.add_argument("--record-revision", action="store_true", help="Validate and save the style in project history")
     author_revisions.register(actions)
     args = parser.parse_args(argv)
     try:
@@ -285,7 +286,7 @@ def main(argv=None):
                 if error.name not in {"textual", "rich"}:
                     raise
                 parser.exit(1, "Install requirements-tui.txt to use the interactive art preview.\n")
-            preview_project(args.project, args.asset)
+            preview_project(args.project, args.asset, record_revision=args.record_revision)
             return
         if args.action == "art":
             art = convert_image(args.image, alt="Image preview", width=args.width, height=args.height,
