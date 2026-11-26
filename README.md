@@ -104,3 +104,8 @@ Run the engine and UI tests with the Textual dependencies installed. The UI test
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+
+## Author a pack
+
+Use the [pack authoring quickstart](docs/pack-authoring-quickstart.md) to validate, bake and play the included mystery. The [authoring plan](docs/pack-authoring-plan.md) tracks the planned asset pipeline and model-assisted revision workflow.

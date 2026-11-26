@@ -1,0 +1,376 @@
+{
+  "author_schema": 1,
+  "id": "lantern_at_low_tide",
+  "version": 1,
+  "title": "Lantern at Low Tide",
+  "brief": {
+    "premise": "The harbor warning light went dark at the worst moment. Find out who moved it before the tide comes in.",
+    "tone": "Quiet coastal mystery with an anxious but hopeful ending.",
+    "audience": "General",
+    "difficulty": "Short tutorial mystery",
+    "canon": "Oren moved the lamp to the storehouse after seawater cracked its lens. He rang the bell instead; the tide and signal records clear up the apparent theft."
+  },
+  "start": "quay",
+  "goal": "resolved",
+  "flags": [
+    "storehouse_open",
+    "resolved"
+  ],
+  "mandatory_clues": [
+    "bell_call",
+    "signal_log"
+  ],
+  "locations": [
+    {
+      "id": "quay",
+      "name": "Low Tide Quay",
+      "description": "Lysa is listening to the harbor. A tide chart hangs beside the signal hut. Try inspecting the tide_chart.",
+      "exits": [
+        "signal_hut"
+      ]
+    },
+    {
+      "id": "signal_hut",
+      "name": "Signal Hut",
+      "description": "Oren watches the locked storehouse door. A release box has wave, star and shell marks.",
+      "exits": [
+        "quay",
+        "storehouse"
+      ]
+    },
+    {
+      "id": "storehouse",
+      "name": "Lamp Storehouse",
+      "description": "The warning lamp rests on a workbench with a cracked lens. A signal_log lies beside it.",
+      "exits": [
+        "signal_hut"
+      ]
+    }
+  ],
+  "characters": [
+    {
+      "id": "lysa",
+      "name": "Lysa",
+      "location": "quay",
+      "voice": "Brisk harbor runner. Short questions, quick observations.",
+      "opening_question": "Did you hear a warning?",
+      "opening_reply": "Lysa says, 'I heard the warning bell after the lamp went dark. The release-box rhyme is wave first, star next, shell last.'",
+      "reveals": [
+        "bell_call"
+      ]
+    },
+    {
+      "id": "oren",
+      "name": "Oren",
+      "location": "signal_hut",
+      "voice": "Careful signal keeper. Wants dates and times before he draws a conclusion.",
+      "opening_question": "How can I get to the storehouse?",
+      "opening_reply": "Oren says, 'Show me the tide chart and I can let you into the storehouse. Bring back the signal log if you want the full account.'",
+      "reveals": []
+    }
+  ],
+  "clues": [
+    {
+      "id": "bell_call",
+      "title": "The warning bell",
+      "kind": "Testimony",
+      "certainty": "firsthand",
+      "source": "Lysa",
+      "location": "quay",
+      "witness": "lysa",
+      "question": "Did you hear a warning?",
+      "text": "Lysa heard the harbor warning bell after the lamp went dark."
+    },
+    {
+      "id": "tide_chart",
+      "title": "The tide chart",
+      "kind": "Evidence",
+      "certainty": "recorded",
+      "source": "Quay tide chart",
+      "location": "quay",
+      "text": "The chart records a surge near the signal lamp just before the warning bell."
+    },
+    {
+      "id": "signal_log",
+      "title": "The signal log",
+      "kind": "Evidence",
+      "certainty": "recorded",
+      "source": "Signal keeper's log",
+      "location": "storehouse",
+      "subjects": [
+        "oren"
+      ],
+      "text": "Oren recorded a cracked lens, a move to the storehouse, and a bell warning in place of the lamp."
+    }
+  ],
+  "gates": [
+    {
+      "from": "signal_hut",
+      "to": "storehouse",
+      "requires": "storehouse_open"
+    }
+  ],
+  "puzzles": [
+    {
+      "template": "symbol_sequence",
+      "location": "signal_hut",
+      "symbols": [
+        "shell",
+        "star",
+        "wave"
+      ],
+      "sequence": [
+        "wave",
+        "star",
+        "shell"
+      ],
+      "solved_flag": "box_open",
+      "success_reply": "The release box clicks. You can now open the storehouse."
+    }
+  ],
+  "actions": [
+    {
+      "location": "quay",
+      "verb": "inspect",
+      "target": "tide_chart",
+      "message": "The chart shows a surge reached the lamp just before the bell.",
+      "sets": [
+        "tide_chart"
+      ],
+      "once": "tide_chart"
+    },
+    {
+      "location": "signal_hut",
+      "verb": "show",
+      "target": "oren",
+      "requires": [
+        "tide_chart"
+      ],
+      "sets": [
+        "storehouse_open"
+      ],
+      "once": "storehouse_open",
+      "message": "Oren checks the chart against his notes and unlocks the storehouse.",
+      "blocked": "Find the tide chart on the quay first."
+    },
+    {
+      "location": "signal_hut",
+      "verb": "open",
+      "target": "storehouse",
+      "requires": [
+        "box_open"
+      ],
+      "sets": [
+        "storehouse_open"
+      ],
+      "once": "storehouse_open",
+      "message": "You pull the released bolt and open the storehouse.",
+      "blocked": "The release box is still locked."
+    },
+    {
+      "location": "storehouse",
+      "verb": "inspect",
+      "target": "signal_log",
+      "sets": [
+        "signal_log"
+      ],
+      "once": "signal_log",
+      "message": "The log explains the cracked lens. Oren moved the lamp here and rang the bell instead."
+    },
+    {
+      "location": "signal_hut",
+      "verb": "report",
+      "target": "oren",
+      "requires": [
+        "signal_log",
+        "bell_call"
+      ],
+      "sets": [
+        "resolved"
+      ],
+      "once": "resolved",
+      "message": "Oren and Lysa reconcile the bell and lamp records. The replacement warning light is lit.",
+      "blocked": "Compare Lysa's account with the storehouse signal log before reporting."
+    }
+  ],
+  "playtests": {
+    "witness": [
+      {
+        "verb": "talk",
+        "target": "lysa"
+      },
+      {
+        "verb": "inspect",
+        "target": "tide_chart"
+      },
+      {
+        "verb": "move",
+        "target": "signal_hut"
+      },
+      {
+        "verb": "talk",
+        "target": "oren"
+      },
+      {
+        "verb": "show",
+        "target": "oren"
+      },
+      {
+        "verb": "move",
+        "target": "storehouse"
+      },
+      {
+        "verb": "inspect",
+        "target": "signal_log"
+      },
+      {
+        "verb": "move",
+        "target": "signal_hut"
+      },
+      {
+        "verb": "report",
+        "target": "oren"
+      }
+    ],
+    "puzzle": [
+      {
+        "verb": "talk",
+        "target": "lysa"
+      },
+      {
+        "verb": "move",
+        "target": "signal_hut"
+      },
+      {
+        "verb": "solve",
+        "target": "wave star shell"
+      },
+      {
+        "verb": "open",
+        "target": "storehouse"
+      },
+      {
+        "verb": "move",
+        "target": "storehouse"
+      },
+      {
+        "verb": "inspect",
+        "target": "signal_log"
+      },
+      {
+        "verb": "move",
+        "target": "signal_hut"
+      },
+      {
+        "verb": "report",
+        "target": "oren"
+      }
+    ]
+  },
+  "art": [
+    {
+      "id": "quay_at_dusk",
+      "scene": "quay",
+      "source": "art/low-tide-quay.png",
+      "alt": "A harbor signal lamp and a timber quay under the moon.",
+      "width": 40,
+      "height": 10,
+      "mode": "color",
+      "style": "braille"
+    },
+    {
+      "id": "lysa_portrait",
+      "portrait": "lysa",
+      "source": "art/gpig.jpg",
+      "alt": "Lysa wears a blue cap and a rust-red coat.",
+      "width": 12,
+      "height": 7,
+      "mode": "color",
+      "style": "truecolor"
+    },
+    {
+      "id": "oren_portrait",
+      "portrait": "oren",
+      "source": "art/oren.png",
+      "alt": "Oren wears a gold cap and a green coat.",
+      "width": 12,
+      "height": 7,
+      "mode": "ascii"
+    }
+  ],
+  "puzzle_variants": {
+    "timeline": {
+      "puzzles": [
+        {
+          "template": "timeline_order",
+          "location": "signal_hut",
+          "solved_flag": "box_open",
+          "title": "Harbor warning timeline",
+          "prompt": "Arrange the warning events from earliest to latest.",
+          "cards": [
+            {
+              "id": "bell",
+              "label": "Bell rings"
+            },
+            {
+              "id": "blackout",
+              "label": "Warning lamp goes dark"
+            },
+            {
+              "id": "surge",
+              "label": "Seawater reaches the lamp"
+            }
+          ],
+          "sequence": [
+            "surge",
+            "blackout",
+            "bell"
+          ],
+          "success_reply": "The timeline matches the harbor record. The release box clicks open."
+        }
+      ],
+      "location_descriptions": {
+        "signal_hut": "Oren watches the locked storehouse door. The release box asks you to put the harbor warning in order."
+      },
+      "character_replies": {
+        "lysa": "Lysa says, 'The surge came first. Then the lamp went dark, and only then did I hear the warning bell.'"
+      },
+      "playtests": {
+        "puzzle": [
+          {
+            "verb": "talk",
+            "target": "lysa"
+          },
+          {
+            "verb": "move",
+            "target": "signal_hut"
+          },
+          {
+            "verb": "solve",
+            "target": "surge blackout bell"
+          },
+          {
+            "verb": "open",
+            "target": "storehouse"
+          },
+          {
+            "verb": "move",
+            "target": "storehouse"
+          },
+          {
+            "verb": "inspect",
+            "target": "signal_log"
+          },
+          {
+            "verb": "move",
+            "target": "signal_hut"
+          },
+          {
+            "verb": "report",
+            "target": "oren"
+          }
+        ]
+      }
+    }
+  }
+}

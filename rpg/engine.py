@@ -2,6 +2,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from .terminal_art import TerminalArt
+
 
 CERTAINTY_LABELS = {
     "guess": "Guess",
@@ -86,10 +88,16 @@ class Pack:
     gates: dict[tuple[str, str], str]
     puzzle_symbols: dict[str, tuple[str, ...]]
     dialogue_style: dict
+    puzzle_views: dict[str, dict]
+    portraits: dict[str, TerminalArt]
+    scenes: dict[str, TerminalArt]
 
     @classmethod
     def load(cls, path: Path) -> "Pack":
-        data = json.loads(path.read_text(encoding="utf-8"))
+        return cls.from_data(json.loads(path.read_text(encoding="utf-8")))
+
+    @classmethod
+    def from_data(cls, data: dict) -> "Pack":
         if data["schema"] != 1:
             raise ValueError("Unsupported pack schema")
         locations = data["locations"]
@@ -157,10 +165,15 @@ class Pack:
         for evidence in facts.values():
             if not evidence.subjects <= characters:
                 raise ValueError(f"Unknown character in evidence {evidence.id}")
+        assets = {key: TerminalArt.from_data(value) for key, value in data.get("assets", {}).items()}
+        portraits = {npc: assets[key] for npc, key in data.get("portraits", {}).items()}
+        scenes = {location: assets[key] for location, key in data.get("scenes", {}).items()}
+        if portraits.keys() - characters or scenes.keys() - locations.keys():
+            raise ValueError("Terminal art refers to an unknown character or location.")
         return cls(data["id"], data["version"], data["title"], data["start"],
                    data["goal"], locations, facts, items, rules, gates,
                    {location: tuple(symbols) for location, symbols in data.get("puzzle_symbols", {}).items()},
-                   data.get("dialogue_style", {}))
+                   data.get("dialogue_style", {}), data.get("puzzle_views", {}), portraits, scenes)
 
     def start_state(self) -> State:
         return State(self.start)
@@ -197,7 +210,10 @@ class Pack:
         rule = self.rules.get((state.location, command))
         if rule is None:
             if command.verb == "solve" and state.location in self.puzzle_symbols:
-                return Turn(state, "The lockbox stays shut. That combination didn't match.", False)
+                message = self.puzzle_views.get(state.location, {}).get(
+                    "wrong_order", "The lockbox stays shut. That combination didn't match."
+                )
+                return Turn(state, message, False)
             return Turn(state, "That action isn't available here.", False)
         if rule.once in state.flags:
             return Turn(state, "You've already done that.", False)

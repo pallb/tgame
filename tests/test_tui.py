@@ -191,7 +191,7 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(game.state, before)
 
     async def test_character_board_groups_discovered_clues_by_person(self):
-        from textual.widgets import Button, RichLog
+        from textual.widgets import Button, OptionList, RichLog
 
         from rpg.engine import Command
         from rpg.tui import CharacterBoard, Conversation
@@ -210,7 +210,10 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("The burned letter", text)
             self.assertNotIn("Horses by the river", text)
             self.assertTrue(game.screen.query_one("#character-talk", Button).disabled)
+            game.screen.query_one("#character-list", OptionList).focus()
+            await pilot.pause()
             await pilot.press("down")
+            await pilot.pause()
             text = " ".join(line.text for line in board.lines)
             self.assertIn("River Landing · Here now", text)
             self.assertIn("The north-road theory · Guess", text)
@@ -293,3 +296,34 @@ class AdventureTest(unittest.IsolatedAsyncioTestCase):
             await submit("report mara")
             self.assertIn(game.pack.goal, game.state.flags)
             self.assertEqual(game.save.load_or_start(game.pack), game.state)
+
+    @unittest.skipUnless(find_spec("PIL"), "Pillow is optional for text-only authoring")
+    async def test_authored_art_and_timeline_render_in_the_game(self):
+        from textual.widgets import OptionList, RichLog, Static
+
+        from rpg.authoring import load_project
+        from rpg.engine import Command
+        from rpg.tui import Adventure, Conversation, Lockbox
+
+        project = Path(__file__).resolve().parents[1] / "authoring_examples/lantern_at_low_tide.json"
+        pack = load_project(project, variant="timeline").pack
+        save = Save(Path(":memory:"))
+        self.addCleanup(save.close)
+        game = Adventure(pack, save, provider=object(), show_startup=False)
+        async with game.run_test(size=(66, 23)) as pilot:
+            story = game.query_one("#story", RichLog)
+            self.assertGreaterEqual(len(story.lines), len(pack.scenes["quay"].ascii_rows))
+            game.dispatch(Command("talk", "lysa"))
+            await pilot.pause()
+            self.assertIsInstance(game.screen, Conversation)
+            self.assertIsNotNone(game.screen.query_one("#portrait", Static).content)
+            await pilot.press("escape")
+            game.apply_command(Command("move", "signal_hut"))
+            game.dispatch(Command("try", "timeline"))
+            await pilot.pause()
+            self.assertIsInstance(game.screen, Lockbox)
+            self.assertEqual(game.screen.view["title"], "Harbor warning timeline")
+            self.assertEqual(game.screen.query_one(OptionList).option_count, 3)
+            await pilot.press("end", "enter", "up", "enter", "home", "enter", "f5")
+            self.assertIn("box_open", game.state.flags)
+            self.assertNotIsInstance(game.screen, Lockbox)

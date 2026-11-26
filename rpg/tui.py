@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+import sys
 from dataclasses import replace
 
 from rich.text import Text
@@ -16,6 +17,36 @@ from .dialogue import (
 from .engine import Character, Command, Evidence, Pack, State
 from .saves import Save
 from .splash import Startup
+from .terminal_art import TerminalArt
+
+
+def art_render(art: TerminalArt, width: int, *, color=True) -> Text:
+    try:
+        "█▀░⣿".encode(getattr(sys.__stdout__, "encoding", None) or "utf-8")
+    except UnicodeError:
+        color = False
+    output = Text(no_wrap=True, overflow="crop")
+    for index, ascii_row in enumerate(art.ascii_rows):
+        if index:
+            output.append("\n")
+        if color and art.glyph_rows:
+            row = art.glyph_rows[index][:width]
+            if art.color_space:
+                for column, glyph in enumerate(row):
+                    foreground, background = art.foreground[index][column], art.background[index][column]
+                    if art.color_space == "xterm256":
+                        style = f"color({foreground}) on color({background})"
+                    else:
+                        style = f"#{foreground} on #{background}"
+                    output.append(glyph, style=style)
+            else:
+                output.append(row)
+        elif color and art.palette:
+            for cell in art.color_rows[index][:width]:
+                output.append("█", style="#" + art.palette[int(cell, 16)])
+        else:
+            output.append(ascii_row[:width])
+    return output
 
 
 class AdventurePanel(ModalScreen):
@@ -59,14 +90,16 @@ class Lockbox(AdventurePanel):
         self.pack = pack
         self.state = state
         self.symbols = symbols
+        self.view = pack.puzzle_views.get(state.location, {})
+        self.labels = self.view.get("labels", {})
         self.chosen: list[str] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="panel"):
-            yield Static("Riverside lockbox", classes="panel_title")
-            yield Static("Set the engraved slots from left to right.")
+            yield Static(Text(self.view.get("title", "Symbol lockbox")), classes="panel_title")
+            yield Static(Text(self.view.get("prompt", "Set the engraved slots from left to right.")))
             yield Static(id="slots")
-            yield OptionList(*(Text(f"{self.ENGRAVINGS.get(symbol, '◇')}  {symbol.title()}")
+            yield OptionList(*(Text(self.labels.get(symbol, f"{self.ENGRAVINGS.get(symbol, '◇')}  {symbol.title()}"))
                                for symbol in self.symbols), id="engravings")
             yield Static(id="lock-feedback")
             with Horizontal(id="lock-controls"):
@@ -80,7 +113,8 @@ class Lockbox(AdventurePanel):
         self.query_one(OptionList).focus()
 
     def show_slots(self):
-        slots = [f"[ {self.ENGRAVINGS.get(symbol, '◇')} {symbol.title()} ]" for symbol in self.chosen]
+        slots = [f"[ {symbol.title()} ]" if self.labels else f"[ {self.ENGRAVINGS.get(symbol, '◇')} {symbol.title()} ]"
+                 for symbol in self.chosen]
         slots += ["[   ·   ]"] * (len(self.symbols) - len(self.chosen))
         self.query_one("#slots", Static).update(Text(" ".join(slots), style="bold #e4bd73"))
         self.query_one("#try-lock", Button).disabled = len(self.chosen) < len(self.symbols)
@@ -234,12 +268,14 @@ class CharacterBoard(AdventurePanel):
 
 
 class Conversation(AdventurePanel):
-    def __init__(self, npc: str, topics: list[tuple[str, str]], history: list[Text], question: str = ""):
+    def __init__(self, npc: str, topics: list[tuple[str, str]], history: list[Text],
+                 question: str = "", portrait: TerminalArt | None = None):
         super().__init__()
         self.npc = npc
         self.topics = topics
         self.history = history
         self.question = question
+        self.portrait = portrait
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="panel conversation"):
@@ -247,6 +283,8 @@ class Conversation(AdventurePanel):
             with Horizontal(id="conversation-body"):
                 yield RichLog(id="exchanges", wrap=True)
                 with Vertical(id="conversation-topics"):
+                    if self.portrait:
+                        yield Static(art_render(self.portrait, 15), id="portrait")
                     yield Static("Topics")
                     yield OptionList(*(Text(label) for label, _ in self.topics), id="topics")
             yield Input(value=self.question, placeholder=f"Ask {self.npc.title()} a question", id="question")
@@ -286,7 +324,7 @@ class Adventure(App):
     BINDINGS = [
         Binding("f2", "map", "Map"),
         Binding("f3", "journal", "Evidence"),
-        Binding("f4", "puzzle", "Lockbox"),
+        Binding("f4", "puzzle", "Puzzle"),
         Binding("f6", "characters", "Characters"),
         Binding("ctrl+q", "quit", "Quit"),
         Binding("escape", "cancel_dialogue", show=False),
@@ -325,6 +363,7 @@ class Adventure(App):
     #conversation-topics { width: 29%; min-width: 17; padding: 0 1; border-left: solid #49644c; }
     #conversation-topics Static { height: 1; color: #e4bd73; }
     #conversation-topics #topics { height: 1fr; max-height: 100%; }
+    #conversation-topics #portrait { height: auto; max-height: 7; }
     """
 
     def __init__(self, pack: Pack, save: Save, *, provider: DialogueProvider | None = None,
@@ -415,7 +454,8 @@ class Adventure(App):
         actions.clear_options()
         actions.add_options(
             Text("Look around" if command.verb == "look" else
-                 "Try lockbox" if command.verb == "puzzle" else
+                 self.pack.puzzle_views.get(self.state.location, {}).get("menu", "Try lockbox")
+                 if command.verb == "puzzle" else
                  f"Talk to {command.target.title()}" if command.verb == "talk" else
                  f"{command.verb.title()} {command.target.replace('_', ' ').title()}")
             for command in self.local_actions
@@ -424,8 +464,15 @@ class Adventure(App):
 
     def look(self):
         location = self.pack.locations[self.state.location]
+        self.show_scene()
         self.write(location["description"])
         self.write("Exits  " + ", ".join(location["exits"]), "#8bb498")
+
+    def show_scene(self):
+        scene = self.pack.scenes.get(self.state.location)
+        if scene:
+            story = self.screen_stack[0].query_one("#story", RichLog)
+            story.write(art_render(scene, max(1, story.content_size.width or 36)))
 
     def action_map(self):
         self.push_screen(TravelMap(self.pack, self.state), self.apply_command)
@@ -462,7 +509,8 @@ class Adventure(App):
         npc = command.target
         replies = available_replies(self.pack, self.state, npc, preview.message, focus=self.character_voice)
         topics = conversation_topics(npc, replies, self.pack)
-        self.push_screen(Conversation(npc, topics, self.conversation_history.setdefault(npc, []), question))
+        self.push_screen(Conversation(npc, topics, self.conversation_history.setdefault(npc, []), question,
+                                      self.pack.portraits.get(npc)))
 
     def browse_history(self, offset: int):
         field = self.query_one(Input)
@@ -510,7 +558,7 @@ class Adventure(App):
                 self.action_characters()
             case "puzzle":
                 self.action_puzzle()
-            case "try" if command.target == "lockbox":
+            case "try" if command.target in {"lockbox", "puzzle", "timeline"}:
                 self.action_puzzle()
             case "help":
                 self.write(COMMAND_HELP + "\n/map, /journal, /characters and /puzzle open interactive views."
@@ -617,6 +665,12 @@ class Adventure(App):
         except (ValueError, sqlite3.Error) as error:
             self.write(f"Could not save turn. {error}", "#f2a78e")
             return
+        moved = result.state.location != self.state.location
         self.state = result.state
+        if moved:
+            self.show_scene()
+        portrait = self.pack.portraits.get(command.target) if command.verb == "talk" else None
+        if portrait and result.accepted and not isinstance(self.screen, Conversation):
+            self.screen_stack[0].query_one("#story", RichLog).write(art_render(portrait, 24))
         self.write(result.message, "" if result.accepted else "#f2a78e")
         self.update_status()
